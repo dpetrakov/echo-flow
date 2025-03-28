@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.echoflow.filemonitor</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string>source __REPLACE_WITH_FULL_PATH__/.venv/bin/activate && python3 __REPLACE_WITH_FULL_PATH__/file_monitor.py</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardErrorPath</key>
+    <string>/tmp/echoflow.filemonitor.err</string>
+    <key>StandardOutPath</key>
+    <string>/tmp/echoflow.filemonitor.out</string>
+    <key>WorkingDirectory</key>
+    <string>__REPLACE_WITH_FULL_PATH__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:__REPLACE_WITH_FULL_PATH__/.venv/bin</string>
+        <key>PYTHONPATH</key>
+        <string>__REPLACE_WITH_FULL_PATH__</string>
+        <key>LANG</key>
+        <string>en_US.UTF-8</string>
+    </dict>
+</dict>
+</plist> 

@@ -6,12 +6,10 @@ python-dotenv==1.0.0
 # Основные зависимости
 numpy<2.2,>=1.24
 
-# PyTorch и связанные пакеты
---index-url https://download.pytorch.org/whl/cu121
-torch
-torchvision
-torchaudio
+# Зависимости для мониторинга файлов
+watchdog>=3.0.0
+pathlib2>=2.3.7
 
-# Зависимости для обработки аудио
-pyannote.audio>=3.3.2
-git+https://github.com/m-bain/whisperx.git 
+# Зависимости для обработки аудио (опционально)
+# pyannote.audio>=3.3.2
+# git+https://github.com/m-bain/whisperx.git 

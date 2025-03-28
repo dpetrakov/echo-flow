@@ -1,0 +1,38 @@
+2025-03-28 10:51:15,676 - INFO - Запуск мониторинга директории: /Users/dpetrakov/Audio/Records
+2025-03-28 10:51:15,676 - INFO - Файлы будут копироваться в: /Users/dpetrakov/projects/echo-flow/input
+2025-03-28 10:51:15,676 - INFO - Минимальный размер файла: 100.0 КБ
+2025-03-28 10:51:15,676 - ERROR - Директория для мониторинга не существует: /Users/dpetrakov/Audio/Records
+2025-03-28 10:56:17,390 - INFO - Запуск мониторинга директории: /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk
+2025-03-28 10:56:17,390 - INFO - Файлы будут копироваться в: /Users/dpetrakov/obsidian/dim/inbox
+2025-03-28 10:56:17,390 - INFO - Минимальный размер файла: 100.0 КБ
+2025-03-28 10:56:17,391 - INFO - Мониторинг запущен. Нажмите Ctrl+C для остановки.
+2025-03-28 10:58:39,653 - INFO - Мониторинг остановлен.
+2025-03-28 10:59:00,763 - INFO - Запуск мониторинга директории: /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk/Recordings
+2025-03-28 10:59:00,763 - INFO - Файлы будут копироваться в: /Users/dpetrakov/obsidian/dim/inbox
+2025-03-28 10:59:00,763 - INFO - Минимальный размер файла: 100.0 КБ
+2025-03-28 10:59:00,763 - INFO - Мониторинг запущен. Нажмите Ctrl+C для остановки.
+2025-03-28 10:59:19,784 - INFO - Копирование /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk/Recordings/B438903B-25BE-491F-884E-B55AD942FC67.wav (размер: 298.66 КБ) в /Users/dpetrakov/obsidian/dim/inbox/B438903B-25BE-491F-884E-B55AD942FC67.wav
+2025-03-28 10:59:19,789 - INFO - Успешно скопирован файл B438903B-25BE-491F-884E-B55AD942FC67.wav
+2025-03-28 13:25:28,213 - INFO - Копирование /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk/Recordings/40A4A0BF-FBCF-4225-BD11-CCE77F4F5009.wav (размер: 2162.66 КБ) в /Users/dpetrakov/obsidian/dim/inbox/40A4A0BF-FBCF-4225-BD11-CCE77F4F5009.wav
+2025-03-28 13:25:28,216 - INFO - Успешно скопирован файл 40A4A0BF-FBCF-4225-BD11-CCE77F4F5009.wav
+2025-03-28 15:50:54,674 - INFO - Мониторинг остановлен.
+2025-03-28 15:51:03,970 - INFO - Запуск мониторинга директории: /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk/Recordings
+2025-03-28 15:51:03,970 - INFO - Файлы будут копироваться в: /Users/dpetrakov/projects/echo-flow/input
+2025-03-28 15:51:03,970 - INFO - Минимальный размер файла: 100.0 КБ
+2025-03-28 15:51:03,971 - INFO - Мониторинг запущен. Нажмите Ctrl+C для остановки.
+2025-03-28 15:54:38,907 - INFO - Запуск мониторинга директории: /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk/Recordings
+2025-03-28 15:54:38,907 - INFO - Файлы будут копироваться в: /Users/dpetrakov/projects/echo-flow/input
+2025-03-28 15:54:38,908 - INFO - Минимальный размер файла: 1024.0 КБ
+2025-03-28 15:54:38,909 - INFO - Мониторинг запущен. Нажмите Ctrl+C для остановки.
+2025-03-28 15:55:19,836 - INFO - Файл /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk/Recordings/E06129AD-52E0-468C-B19C-A8793DC273AF.wav имеет недостаточный размер (4.00 КБ < 1024.0 КБ)
+2025-03-28 15:56:01,609 - INFO - Файл /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk/Recordings/348979FC-149C-403A-BF2A-53E0CB2AA6BB.wav имеет недостаточный размер (13.66 КБ < 1024.0 КБ)
+2025-03-28 15:56:02,684 - INFO - Файл /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk/Recordings/961778B2-A300-434C-9D5F-71EC680A7EDB.wav имеет недостаточный размер (13.66 КБ < 1024.0 КБ)
+2025-03-28 15:56:43,600 - INFO - Файл /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk/Recordings/A0579966-C22B-41C6-9D12-ACE5DA7AE8B2.wav имеет недостаточный размер (93.32 КБ < 1024.0 КБ)
+2025-03-28 15:57:28,104 - INFO - Копирование /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk/Recordings/148E2306-E0D4-4FD3-B6F9-BBD9C16CEFC1.wav (размер: 1300.99 КБ) в /Users/dpetrakov/projects/echo-flow/input/148E2306-E0D4-4FD3-B6F9-BBD9C16CEFC1.wav
+2025-03-28 15:57:28,192 - INFO - Успешно скопирован файл 148E2306-E0D4-4FD3-B6F9-BBD9C16CEFC1.wav
+2025-03-28 16:02:05,019 - INFO - Запуск мониторинга директории: /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk/Recordings
+2025-03-28 16:02:05,019 - INFO - Файлы будут копироваться в: /Users/dpetrakov/obsidian/dim/inbox
+2025-03-28 16:02:05,019 - INFO - Минимальный размер файла: 1024.0 КБ
+2025-03-28 16:02:05,020 - INFO - Мониторинг запущен. Нажмите Ctrl+C для остановки.
+2025-03-28 16:03:42,462 - INFO - Копирование /Users/dpetrakov/Library/Application Support/com.prakashjoshipax.VoiceInk/Recordings/AC72F8CD-75A8-485E-9B80-0AC6C4BD98CB.wav (размер: 2024.99 КБ) в /Users/dpetrakov/obsidian/dim/inbox/AC72F8CD-75A8-485E-9B80-0AC6C4BD98CB.wav
+2025-03-28 16:03:42,467 - INFO - Успешно скопирован файл AC72F8CD-75A8-485E-9B80-0AC6C4BD98CB.wav
