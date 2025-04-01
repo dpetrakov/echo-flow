@@ -10,6 +10,9 @@ numpy<2.2,>=1.24
 watchdog>=3.0.0
 pathlib2>=2.3.7
 
+# Зависимости для обработки PDF
+PyMuPDF>=1.23.8
+
 # Зависимости для обработки аудио (опционально)
 # pyannote.audio>=3.3.2
 # git+https://github.com/m-bain/whisperx.git 

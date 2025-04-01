@@ -288,8 +288,8 @@ def process_file(file_path):
         no_speech_detected = check_no_speech(subprocess_result.stdout)
         
         # Check files in the output directory after processing
-        print("Files in output directory after processing:")
-        log_files_in_dir(config['output_dir'])
+        # print("Files in output directory after processing:")
+        # log_files_in_dir(config['output_dir'])
         
         # Process JSON and create Markdown file
         output_dir = Path(config['output_dir'])
