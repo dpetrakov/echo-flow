@@ -16,7 +16,8 @@ def load_config():
     return {
         'input_dir': os.getenv('INPUT_DIR', 'input'),
         'output_dir': os.getenv('OUTPUT_DIR', 'output'),
-        'check_interval': int(os.getenv('CHECK_INTERVAL', '5'))  # check interval in seconds
+        'check_interval': int(os.getenv('CHECK_INTERVAL', '5')),  # check interval in seconds
+        'min_file_size': int(os.getenv('MIN_FILE_SIZE_KB', '100')) * 1024  # Size in KB
     }
 
 def ensure_directories():
@@ -248,18 +249,95 @@ def group_and_format_dialog(input_file, output_md, original_filename, timestamp,
         print(f"[ERROR] Error creating Markdown: {str(e)}")
         return False
 
+def process_pdf_file(file_path, output_dir):
+    """Process PDF file using marker_single"""
+    try:
+        print(f"Starting PDF file processing: {file_path}")
+        
+        # Get Gemini API key from .env file
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+        
+        if not gemini_api_key:
+            print("Gemini API key not found in .env file. Processing will be done without using LLM.")
+        
+        # Optimized parameters for marker_single
+        command = [
+            'marker_single',
+            str(file_path),
+            '--output_dir', output_dir,
+            '--output_format', 'markdown',
+            '--disable_tqdm',               # Disable progress bars for background process
+            '--max_concurrency', '3'        # Optimal number of parallel requests
+        ]
+        
+        # If Gemini API key is available, add parameters for using LLM
+        if gemini_api_key:
+            command.extend([
+                '--use_llm',                  # Enable LLM for better quality
+                '--gemini_api_key', gemini_api_key,
+                '--model_name', 'gemini-2.0-flash'  # Fast model with good quality
+            ])
+        
+        print(f"Executing command: {' '.join(command)}")
+        
+        result = subprocess.run(
+            command,
+            capture_output=True, 
+            text=True
+        )
+        
+        if result.returncode != 0:
+            print(f"Error processing PDF: {result.stderr}")
+            return False
+        
+        print(f"PDF file successfully processed: {file_path}")
+        return True
+    except Exception as e:
+        print(f"Error running marker_single: {str(e)}")
+        return False
+
 def process_file(file_path):
     """Process a single file"""
     try:
         # Get absolute path to the file
         abs_file_path = file_path.resolve()
         file_name = file_path.stem
-        file_ext = file_path.suffix
+        file_ext = file_path.suffix.lower()
         
         # Create a single timestamp for all files in this processing
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         print(f"\n>>> Starting to process file: {abs_file_path} [Session: {timestamp}]")
         
+        # Generate new filename prefix based on file type
+        if file_ext == '.pdf':
+            # For PDF files, we don't need audio duration
+            duration = 0
+            filename_prefix = generate_filename_prefix(timestamp, duration)
+            
+            # Create a new filename with the new naming scheme
+            new_name = f"{filename_prefix}_document{file_ext}"
+            output_path = Path(config['output_dir']) / new_name
+            
+            # Process PDF directly
+            print(f"Processing PDF file: {file_path}")
+            pdf_processed = process_pdf_file(abs_file_path, config['output_dir'])
+            
+            # Move the original file to the output directory
+            print(f"\n>>> Moving original PDF file to output directory: {file_path.name} -> {output_path.name}")
+            shutil.move(str(file_path), str(output_path))
+            print(f"File moved successfully.")
+            
+            if pdf_processed:
+                print(f"\n>>> PDF file {file_path.name} processed successfully")
+                return True
+            else:
+                # Create error markdown file
+                error_message = "The PDF file could not be processed by marker_single. Please check the file format and try again."
+                create_pdf_error_markdown(file_path, output_path, timestamp, error_message)
+                print(f"\n>>> Error processing PDF file {file_path.name}")
+                return False
+        
+        # Process audio files (WAV, MP3, etc.)
         # Get audio duration
         duration = get_audio_duration(abs_file_path)
         print(f"Audio duration: {timedelta(seconds=duration)}")
@@ -438,9 +516,49 @@ def process_file(file_path):
         print(f"Error processing file {file_path}: {str(e)}")
         return False
 
+def create_pdf_error_markdown(file_path, output_path, timestamp, error_message):
+    """Create markdown file with error information for PDF processing"""
+    try:
+        # Generate error markdown filename
+        error_md_file = Path(config['output_dir']) / f"{output_path.stem}_error.md"
+        
+        with error_md_file.open("w", encoding="utf-8") as f:
+            # Добавляем метаданные в формате Obsidian
+            f.write("---\n")
+            f.write(f"created: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"original_filename: {file_path.name}\n")
+            f.write(f"error: PDF processing error\n")
+            f.write("---\n\n")
+            
+            f.write(f"# Error processing PDF file {file_path.name}\n\n")
+            f.write(f"Processing date and time: {timestamp.replace('_', ' ')}\n\n")
+            
+            f.write("## Error Details\n\n")
+            f.write(f"{error_message}\n\n")
+            
+            f.write("## Possible Error Causes\n\n")
+            f.write("- PDF file format not supported\n")
+            f.write("- PDF file is encrypted or protected\n")
+            f.write("- Error in the marker_single tool\n")
+            f.write("- Insufficient memory or resources\n")
+            
+            f.write("\n## File Information\n\n")
+            f.write(f"- Filename: {file_path.name}\n")
+            f.write(f"- Size: {file_path.stat().st_size} bytes\n")
+            f.write(f"- Moved to: {output_path.name}\n")
+        
+        print(f"Created error information markdown: {error_md_file.name}")
+        return error_md_file
+    except Exception as e:
+        print(f"Error creating PDF error markdown: {str(e)}")
+        return None
+
 def main():
     """Main service loop"""
     print(f"Service started. Monitoring directory: {config['input_dir']}")
+    print(f"Files will be processed and saved to: {config['output_dir']}")
+    print(f"Minimum file size: {config['min_file_size']/1024} KB")
+    print(f"Supported formats: WAV, MP3, PDF")
     
     # Create necessary directories at startup
     ensure_directories()
@@ -455,8 +573,20 @@ def main():
                     if file_path.name.startswith("~syncthing~") and file_path.name.endswith(".tmp"):
                         print(f"Ignoring syncthing temporary file: {file_path.name}")
                         continue
+                    
+                    # Check file size
+                    file_size = file_path.stat().st_size
+                    if file_size < config['min_file_size']:
+                        print(f"File {file_path.name} is too small ({file_size/1024:.2f} KB < {config['min_file_size']/1024} KB), skipping.")
+                        continue
+                    
+                    # Check file extension
+                    file_ext = file_path.suffix.lower()
+                    if file_ext not in ['.wav', '.mp3', '.pdf']:
+                        print(f"Unsupported file type: {file_ext}, skipping file: {file_path.name}")
+                        continue
                         
-                    print(f"New file detected: {file_path.name}")
+                    print(f"New file detected: {file_path.name} ({file_size/1024:.2f} KB)")
                     process_file(file_path)
             
             # Wait before next check
@@ -467,9 +597,17 @@ def main():
             time.sleep(config['check_interval'])
 
 if __name__ == "__main__":
+    # Configuration loaded at startup
     config = load_config()
+    
+    # Print startup banner
+    print("=" * 80)
+    print("EchoFlow File Processor Service")
+    print("Unified audio and PDF processor")
+    print("=" * 80)
+    
     main() 
 
 
     # TODO: удалять аудио файлы старше недели из processed
-    # TODO: 
+    # TODO: добавить обработку других форматов аудио

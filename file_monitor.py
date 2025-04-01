@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-# Настройка логирования
+# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -21,74 +21,74 @@ logging.basicConfig(
     ]
 )
 
-# Загрузка переменных окружения из .env файла
+# Load environment variables from .env file
 load_dotenv()
 
-# Получение переменных из .env
+# Get variables from .env
 input_dir = os.getenv("INPUT_DIR")
 monitored_dir = os.getenv("MONITORED_DIR")
-min_file_size = int(os.getenv("MIN_FILE_SIZE_KB", "100")) * 1024  # Размер в КБ
-check_interval = int(os.getenv("CHECK_INTERVAL", "5"))  # Интервал проверки в секундах
-output_dir = os.getenv("OUTPUT_DIR")  # Директория для выходных данных (транскрипты)
+min_file_size = int(os.getenv("MIN_FILE_SIZE_KB", "100")) * 1024  # Size in KB
+check_interval = int(os.getenv("CHECK_INTERVAL", "5"))  # Check interval in seconds
+output_dir = os.getenv("OUTPUT_DIR")  # Directory for output data (transcripts)
 
 def safe_copy_file(src, dst):
-    """Безопасное копирование файла с использованием cp для обхода ограничений доступа"""
+    """Safe file copying using cp to bypass access restrictions"""
     try:
-        # Используем команду cp для обхода ограничений доступа в macOS
+        # Use cp command to bypass access restrictions in macOS
         result = subprocess.run(['cp', src, dst], capture_output=True, text=True)
         
         if result.returncode != 0:
-            logging.error(f"Ошибка при копировании через cp: {result.stderr}")
+            logging.error(f"Error copying file with cp: {result.stderr}")
             return False
         return True
     except Exception as e:
-        logging.error(f"Ошибка при запуске команды cp: {str(e)}")
+        logging.error(f"Error running cp command: {str(e)}")
         return False
 
 def safe_delete_file(file_path):
-    """Безопасное удаление файла"""
+    """Safe file deletion"""
     try:
         if os.path.exists(file_path):
             os.remove(file_path)
-            logging.info(f"Файл успешно удален: {file_path}")
+            logging.info(f"File successfully deleted: {file_path}")
             return True
         else:
-            logging.warning(f"Файл не существует: {file_path}")
+            logging.warning(f"File does not exist: {file_path}")
             return False
     except Exception as e:
-        logging.error(f"Ошибка при удалении файла {file_path}: {str(e)}")
+        logging.error(f"Error deleting file {file_path}: {str(e)}")
         return False
 
 def process_pdf_file(file_path):
-    """Обработка PDF файла с использованием marker_single"""
+    """Process PDF file using marker_single"""
     try:
-        logging.info(f"Запуск обработки PDF файла: {file_path}")
+        logging.info(f"Starting PDF file processing: {file_path}")
         
-        # Получение API-ключа Gemini из .env файла
+        # Get Gemini API key from .env file
         gemini_api_key = os.getenv("GEMENI_API_KEY")
         
         if not gemini_api_key:
-            logging.warning("API-ключ Gemini не найден в .env файле. Обработка будет выполнена без использования LLM.")
+            logging.warning("Gemini API key not found in .env file. Processing will be done without using LLM.")
         
-        # Оптимизированные параметры для marker_single
+        # Optimized parameters for marker_single
         command = [
             'marker_single',
             str(file_path),
             '--output_dir', output_dir,
             '--output_format', 'markdown',
-            '--disable_tqdm',               # Отключаем прогресс-бары для фонового процесса
-            '--max_concurrency', '3'        # Оптимальное количество параллельных запросов
+            '--disable_tqdm',               # Disable progress bars for background process
+            '--max_concurrency', '3'        # Optimal number of parallel requests
         ]
         
-        # Если ключ API Gemini доступен, добавляем параметры для использования LLM
+        # If Gemini API key is available, add parameters for using LLM
         if gemini_api_key:
             command.extend([
-                '--use_llm',                  # Включаем LLM для лучшего качества
+                '--use_llm',                  # Enable LLM for better quality
                 '--gemini_api_key', gemini_api_key,
-                '--model_name', 'gemini-2.0-flash'  # Быстрая модель с хорошим качеством
+                '--model_name', 'gemini-2.0-flash'  # Fast model with good quality
             ])
         
-        logging.info(f"Выполняется команда: {' '.join(command)}")
+        logging.info(f"Executing command: {' '.join(command)}")
         
         result = subprocess.run(
             command,
@@ -97,39 +97,39 @@ def process_pdf_file(file_path):
         )
         
         if result.returncode != 0:
-            logging.error(f"Ошибка при обработке PDF: {result.stderr}")
+            logging.error(f"Error processing PDF: {result.stderr}")
             return False
         
-        logging.info(f"PDF файл успешно обработан: {file_path}")
+        logging.info(f"PDF file successfully processed: {file_path}")
         return True
     except Exception as e:
-        logging.error(f"Ошибка при запуске marker_single: {str(e)}")
+        logging.error(f"Error running marker_single: {str(e)}")
         return False
 
 def get_file_size(file_path):
-    """Получение размера файла"""
+    """Get file size"""
     try:
-        # Используем команду ls -l для проверки размера файла
+        # Use ls -l command to check file size
         result = subprocess.run(['ls', '-l', str(file_path)], capture_output=True, text=True)
         if result.returncode != 0:
-            logging.error(f"Не удалось получить информацию о файле: {result.stderr}")
+            logging.error(f"Failed to get file information: {result.stderr}")
             return -1
         
-        # Парсим размер файла из вывода ls -l
+        # Parse file size from ls -l output
         try:
             file_size = int(result.stdout.split()[4])
             return file_size
         except (IndexError, ValueError):
-            logging.error(f"Не удалось определить размер файла: {result.stdout}")
+            logging.error(f"Failed to determine file size: {result.stdout}")
             return -1
     except Exception as e:
-        logging.error(f"Ошибка при получении размера файла {file_path}: {str(e)}")
+        logging.error(f"Error getting file size for {file_path}: {str(e)}")
         return -1
 
 class FileMonitorHandler(FileSystemEventHandler):
     def __init__(self):
         super().__init__()
-        # Словарь для отслеживания уже обработанных файлов
+        # Dictionary to track already processed files
         self.processed_files = {}
     
     def on_created(self, event):
@@ -138,25 +138,25 @@ class FileMonitorHandler(FileSystemEventHandler):
         
         file_path = Path(event.src_path)
         
-        # Проверяем, не обрабатывали ли мы уже этот файл
+        # Check if we've already processed this file
         if str(file_path) in self.processed_files:
             return
         
-        # Небольшая задержка, чтобы файл успел полностью записаться
+        # Small delay to allow the file to be fully written
         time.sleep(1)
         
         file_suffix = file_path.suffix.lower()
         
-        # Обработка WAV файлов
+        # Processing WAV files
         if file_suffix == '.wav':
             self.handle_wav_file(file_path)
-        # Обработка PDF файлов
+        # Processing PDF files
         elif file_suffix == '.pdf':
             self.handle_pdf_file(file_path)
-        # Обработка TXT файлов - делаем через on_modified,
-        # т.к. текстовые файлы могут дописываться после создания
+        # Processing TXT files - do through on_modified,
+        # as text files may be appended after creation
         elif file_suffix == '.txt' and file_path.name.endswith('_formatted.txt'):
-            # Отмечаем файл как ожидающий обработки при модификации
+            # Mark file as pending for processing on modification
             self.processed_files[str(file_path)] = "pending"
     
     def on_modified(self, event):
@@ -166,129 +166,129 @@ class FileMonitorHandler(FileSystemEventHandler):
         file_path = Path(event.src_path)
         file_suffix = file_path.suffix.lower()
         
-        # Обрабатываем только TXT файлы с определенным форматом
+        # Process only TXT files with specific format
         if file_suffix == '.txt' and file_path.name.endswith('_formatted.txt'):
-            # Проверяем статус файла (если он был создан ранее)
+            # Check file status (if it was created earlier)
             if str(file_path) in self.processed_files and self.processed_files[str(file_path)] == "pending":
-                logging.info(f"Файл модифицирован и готов к обработке: {file_path}")
+                logging.info(f"File modified and ready for processing: {file_path}")
                 
-                # Ожидаем, чтобы убедиться, что файл больше не модифицируется
+                # Wait to ensure the file is no longer being modified
                 time.sleep(3)
                 
-                # Обрабатываем файл
+                # Process the file
                 self.handle_txt_file(file_path)
                 
-                # Отмечаем файл как обработанный
+                # Mark file as processed
                 self.processed_files[str(file_path)] = "processed"
     
     def handle_wav_file(self, file_path):
-        """Обработка WAV файла"""
+        """Process WAV file"""
         try:
             file_size = get_file_size(file_path)
             if file_size < 0:
                 return
             
             if file_size >= min_file_size:
-                # Копируем файл в INPUT_DIR
+                # Copy file to INPUT_DIR
                 dest_path = os.path.join(input_dir, file_path.name)
-                logging.info(f"Копирование {file_path} (размер: {file_size/1024:.2f} КБ) в {dest_path}")
+                logging.info(f"Copying {file_path} (size: {file_size/1024:.2f} KB) to {dest_path}")
                 
                 if safe_copy_file(str(file_path), dest_path):
-                    logging.info(f"Успешно скопирован WAV файл {file_path.name}")
+                    logging.info(f"WAV file successfully copied: {file_path.name}")
                     
-                    # Удаляем исходный файл после успешного копирования
+                    # Delete original file after successful copy
                     if safe_delete_file(str(file_path)):
-                        logging.info(f"Исходный WAV файл удален: {file_path}")
+                        logging.info(f"Original WAV file deleted: {file_path}")
                     else:
-                        logging.error(f"Не удалось удалить исходный WAV файл: {file_path}")
+                        logging.error(f"Failed to delete original WAV file: {file_path}")
                 else:
-                    logging.error(f"Не удалось скопировать WAV файл {file_path}")
+                    logging.error(f"Failed to copy WAV file: {file_path}")
             else:
-                logging.info(f"Файл {file_path} имеет недостаточный размер ({file_size/1024:.2f} КБ < {min_file_size/1024} КБ)")
+                logging.info(f"File {file_path} is too small ({file_size/1024:.2f} KB < {min_file_size/1024} KB)")
         except Exception as e:
-            logging.error(f"Ошибка при обработке WAV файла {file_path}: {str(e)}")
+            logging.error(f"Error processing WAV file {file_path}: {str(e)}")
     
     def handle_pdf_file(self, file_path):
-        """Обработка PDF файла"""
+        """Process PDF file"""
         try:
             file_size = get_file_size(file_path)
             if file_size < 0:
                 return
             
-            # Проверка размера может быть опциональной для PDF файлов
+            # Size check may be optional for PDF files
             if file_size >= min_file_size:
-                logging.info(f"Обнаружен PDF файл {file_path} (размер: {file_size/1024:.2f} КБ)")
+                logging.info(f"Detected PDF file {file_path} (size: {file_size/1024:.2f} KB)")
                 
-                # Обработка PDF файла с помощью marker_single
+                # Process PDF file using marker_single
                 if process_pdf_file(file_path):
-                    logging.info(f"PDF файл успешно обработан: {file_path.name}")
+                    logging.info(f"PDF file successfully processed: {file_path.name}")
                     
-                    # Удаляем исходный файл после успешной обработки
+                    # Delete original file after successful processing
                     if safe_delete_file(str(file_path)):
-                        logging.info(f"Исходный PDF файл удален: {file_path}")
+                        logging.info(f"Original PDF file deleted: {file_path}")
                     else:
-                        logging.error(f"Не удалось удалить исходный PDF файл: {file_path}")
+                        logging.error(f"Failed to delete original PDF file: {file_path}")
                 else:
-                    logging.error(f"Не удалось обработать PDF файл: {file_path}")
+                    logging.error(f"Failed to process PDF file: {file_path}")
             else:
-                logging.info(f"PDF файл {file_path} имеет недостаточный размер ({file_size/1024:.2f} КБ < {min_file_size/1024} КБ)")
+                logging.info(f"PDF file {file_path} is too small ({file_size/1024:.2f} KB < {min_file_size/1024} KB)")
         except Exception as e:
-            logging.error(f"Ошибка при обработке PDF файла {file_path}: {str(e)}")
+            logging.error(f"Error processing PDF file {file_path}: {str(e)}")
 
     def handle_txt_file(self, file_path):
-        """Обработка TXT файла (автоматическое удаление после создания)"""
+        """Process TXT file (automatic deletion after creation)"""
         try:
-            # Дополнительная проверка, является ли файл форматированным текстом
+            # Additional check if file is formatted text
             if file_path.name.endswith('_formatted.txt'):
-                logging.info(f"Обнаружен TXT файл {file_path}, будет удален")
+                logging.info(f"Detected TXT file {file_path}, will be deleted")
                 
-                # Делаем небольшую задержку, чтобы дать время на завершение операций с файлом
+                # Small delay to allow time for file operations to complete
                 time.sleep(2)
                 
-                # Удаляем TXT файл
+                # Delete TXT file
                 if safe_delete_file(str(file_path)):
-                    logging.info(f"TXT файл успешно удален: {file_path}")
+                    logging.info(f"TXT file successfully deleted: {file_path}")
                 else:
-                    logging.error(f"Не удалось удалить TXT файл: {file_path}")
+                    logging.error(f"Failed to delete TXT file: {file_path}")
         except Exception as e:
-            logging.error(f"Ошибка при обработке TXT файла {file_path}: {str(e)}")
+            logging.error(f"Error processing TXT file {file_path}: {str(e)}")
 
 def start_monitoring():
-    logging.info(f"Запуск мониторинга директории: {monitored_dir}")
-    logging.info(f"WAV файлы будут копироваться в: {input_dir}")
-    logging.info(f"PDF файлы будут обрабатываться с выводом в: {output_dir}")
-    logging.info(f"Минимальный размер файла: {min_file_size/1024} КБ")
+    logging.info(f"Starting directory monitoring: {monitored_dir}")
+    logging.info(f"WAV files will be copied to: {input_dir}")
+    logging.info(f"PDF files will be processed with output to: {output_dir}")
+    logging.info(f"Minimum file size: {min_file_size/1024} KB")
     
-    # Проверка существования директорий
+    # Check directory existence
     if not os.path.exists(monitored_dir):
-        logging.error(f"Директория для мониторинга не существует: {monitored_dir}")
+        logging.error(f"Monitored directory does not exist: {monitored_dir}")
         return
         
     if not os.path.exists(input_dir):
-        logging.error(f"Целевая директория для WAV не существует: {input_dir}")
+        logging.error(f"Target directory for WAV does not exist: {input_dir}")
         return
     
     if not os.path.exists(output_dir):
-        logging.error(f"Целевая директория для вывода PDF не существует: {output_dir}")
+        logging.error(f"Output directory for PDF does not exist: {output_dir}")
         return
     
-    # Создаем обработчик событий и наблюдатель
+    # Create event handler and observer
     event_handler = FileMonitorHandler()
     observer = Observer()
     observer.schedule(event_handler, monitored_dir, recursive=False)
     
-    # Запускаем наблюдатель в отдельном потоке
+    # Start observer in separate thread
     observer.start()
     
     try:
-        logging.info("Мониторинг запущен. Нажмите Ctrl+C для остановки.")
+        logging.info("Monitoring started. Press Ctrl+C to stop.")
         while True:
             time.sleep(check_interval)
     except KeyboardInterrupt:
         observer.stop()
     
     observer.join()
-    logging.info("Мониторинг остановлен.")
+    logging.info("Monitoring stopped.")
 
 if __name__ == "__main__":
     start_monitoring() 
