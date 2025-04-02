@@ -320,57 +320,16 @@ def process_pdf_file(file_path, output_dir):
             print(f"[ERROR] Ошибка обработки PDF: {result.stderr}")
             return False, command_output
         
-        # Проверяем созданные файлы в выходном каталоге
+        # Проверяем создание файла в выходном каталоге
         output_dir_path = Path(output_dir)
         base_name = file_path.stem
         
-        # Ищем файлы с разными возможными расширениями
-        possible_extensions = ['.md', '.markdown', '.txt']
-        output_files = []
+        # Ищем файл с расширением .md
+        output_file = output_dir_path / f"{base_name}.md"
         
-        for ext in possible_extensions:
-            files = list(output_dir_path.glob(f"{base_name}{ext}"))
-            output_files.extend(files)
-        
-        if not output_files:
-            # Если файл не найден с расширением, ищем файл без расширения
-            files = list(output_dir_path.glob(f"{base_name}"))
-            output_files.extend(files)
-        
-        if output_files:
-            # Если файл найден, проверяем его содержимое
-            output_file = output_files[0]
-            try:
-                # Пробуем разные кодировки
-                encodings = ['utf-8', 'cp1251', 'latin1']
-                content = None
-                
-                for encoding in encodings:
-                    try:
-                        with open(output_file, 'r', encoding=encoding) as f:
-                            content = f.read()
-                            break
-                    except UnicodeDecodeError:
-                        continue
-                
-                if content is None:
-                    print(f"[ERROR] Не удалось прочитать файл ни с одной из кодировок: {output_file.name}")
-                    return False, command_output
-                
-                if content.strip():  # Проверяем, что файл не пустой
-                    print(f"[SUCCESS] Создан файл маркдаун: {output_file.name}")
-                    # Если файл создан без расширения .md, добавляем его
-                    if not output_file.suffix.lower() in ['.md', '.markdown']:
-                        new_name = output_file.with_suffix('.md')
-                        output_file.rename(new_name)
-                        print(f"[INFO] Переименован файл в: {new_name.name}")
-                    return True, command_output
-                else:
-                    print(f"[WARNING] Создан пустой файл: {output_file.name}")
-                    return False, command_output
-            except Exception as e:
-                print(f"[ERROR] Ошибка чтения файла {output_file.name}: {str(e)}")
-                return False, command_output
+        if output_file.exists():
+            print(f"[SUCCESS] Создан файл маркдаун: {output_file.name}")
+            return True, command_output
         else:
             print(f"[WARNING] Маркдаун файл не был создан, хотя команда завершилась успешно")
             return False, command_output
