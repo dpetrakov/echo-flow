@@ -258,27 +258,38 @@ def process_pdf_file(file_path, output_dir):
         gemini_api_key = os.getenv("GEMINI_API_KEY")
         
         if not gemini_api_key:
-            print("Gemini API key not found in .env file. Processing will be done without using LLM.")
+            print("[WARNING] Gemini API key not found in .env file. Processing will be done without using LLM.")
+            print("[WARNING] Качество обработки PDF может быть ниже без использования LLM.")
+        else:
+            print(f"[INFO] Найден API ключ Gemini. Будем использовать LLM для улучшения качества обработки PDF.")
         
-        # Optimized parameters for marker_single
+        # Базовые параметры для marker_single
         command = [
             'marker_single',
             str(file_path),
             '--output_dir', output_dir,
             '--output_format', 'markdown',
-            '--disable_tqdm',               # Disable progress bars for background process
-            '--max_concurrency', '3'        # Optimal number of parallel requests
+            '--disable_tqdm',               # Отключаем прогресс-бары для фонового процесса
+            '--max_concurrency', '3',       # Оптимальное количество параллельных запросов
+            '--force_ocr',                  # Принудительно использовать OCR для всех страниц
+            '--ocr_languages', 'rus+eng',   # Поддержка русского и английского языков для OCR
+            '--extract_images',             # Извлекать изображения из PDF
+            '--extract_tables'              # Извлекать таблицы из PDF
         ]
         
-        # If Gemini API key is available, add parameters for using LLM
+        # Если доступен API ключ Gemini, добавляем параметры для использования LLM
         if gemini_api_key:
             command.extend([
-                '--use_llm',                  # Enable LLM for better quality
+                '--use_llm',                  # Включаем LLM для лучшего качества
                 '--gemini_api_key', gemini_api_key,
-                '--model_name', 'gemini-2.0-flash'  # Fast model with good quality
+                '--model_name', 'gemini-1.5-pro',  # Более мощная модель для лучшего качества
+                '--temperature', '0.1',            # Низкая температура для более детерминированных ответов
+                '--chunk_size', '10000',           # Увеличенный размер чанка для более полного контекста
+                '--clean_text',                    # Очистка текста от артефактов
+                '--use_llm_for_table_extraction'   # Использовать LLM для извлечения таблиц
             ])
         
-        print(f"Executing command: {' '.join(command)}")
+        print(f"[EXECUTING] Команда: {' '.join(command)}")
         
         result = subprocess.run(
             command,
@@ -286,15 +297,30 @@ def process_pdf_file(file_path, output_dir):
             text=True
         )
         
-        if result.returncode != 0:
-            print(f"Error processing PDF: {result.stderr}")
-            return False
+        # Подготавливаем вывод команды для логирования и возможного использования в отчете об ошибке
+        command_output = ""
+        if result.stdout:
+            command_output += "STDOUT:\n" + result.stdout + "\n\n"
+        if result.stderr:
+            command_output += "STDERR:\n" + result.stderr
         
-        print(f"PDF file successfully processed: {file_path}")
-        return True
+        if result.returncode != 0:
+            print(f"[ERROR] Ошибка обработки PDF: {result.stderr}")
+            return False, command_output
+        
+        # Проверяем, появился ли файл MD в выходном каталоге
+        output_files = list(Path(output_dir).glob(f"{file_path.stem}*.md"))
+        if output_files:
+            print(f"[SUCCESS] Создан файл маркдаун: {output_files[0].name}")
+        else:
+            print(f"[WARNING] Маркдаун файл не был создан, хотя команда завершилась успешно")
+        
+        print(f"[SUCCESS] PDF файл успешно обработан: {file_path}")
+        return True, command_output
     except Exception as e:
-        print(f"Error running marker_single: {str(e)}")
-        return False
+        error_msg = f"[ERROR] Ошибка запуска marker_single: {str(e)}"
+        print(error_msg)
+        return False, error_msg
 
 def process_file(file_path):
     """Process a single file"""
@@ -319,22 +345,35 @@ def process_file(file_path):
             output_path = Path(config['output_dir']) / new_name
             
             # Process PDF directly
-            print(f"Processing PDF file: {file_path}")
-            pdf_processed = process_pdf_file(abs_file_path, config['output_dir'])
+            print(f"[PROCESSING] Обработка PDF файла: {file_path}")
+            pdf_processed, command_output = process_pdf_file(abs_file_path, config['output_dir'])
+            
+            # Проверяем созданные файлы маркдаун
+            output_md_files = list(Path(config['output_dir']).glob(f"{file_path.stem}*.md"))
             
             # Move the original file to the output directory
-            print(f"\n>>> Moving original PDF file to output directory: {file_path.name} -> {output_path.name}")
+            print(f"\n>>> Перемещение исходного PDF-файла в выходной каталог: {file_path.name} -> {output_path.name}")
             shutil.move(str(file_path), str(output_path))
-            print(f"File moved successfully.")
+            print(f"[SUCCESS] Файл успешно перемещен.")
             
-            if pdf_processed:
-                print(f"\n>>> PDF file {file_path.name} processed successfully")
+            if pdf_processed and output_md_files:
+                print(f"\n>>> [SUCCESS] PDF файл {file_path.name} успешно обработан")
+                for md_file in output_md_files:
+                    print(f"[INFO] Создан файл маркдаун: {md_file.name}")
                 return True
+            elif pdf_processed:
+                # PDF обработан без ошибок, но файлы MD не найдены
+                error_message = "PDF файл был обработан без ошибок, но маркдаун файл не был создан. Возможно, PDF документ пустой или содержит только изображения без текста."
+                create_pdf_error_markdown(file_path, output_path, timestamp, error_message, command_output)
+                print(f"\n>>> [WARNING] PDF файл {file_path.name} обработан, но маркдаун не создан")
+                return False
             else:
                 # Create error markdown file
-                error_message = "The PDF file could not be processed by marker_single. Please check the file format and try again."
-                create_pdf_error_markdown(file_path, output_path, timestamp, error_message)
-                print(f"\n>>> Error processing PDF file {file_path.name}")
+                error_message = "Не удалось обработать PDF файл с помощью marker_single. Проверьте формат файла и попробуйте снова."
+                error_md = create_pdf_error_markdown(file_path, output_path, timestamp, error_message, command_output)
+                print(f"\n>>> [ERROR] Ошибка обработки PDF файла {file_path.name}")
+                if error_md:
+                    print(f"[INFO] Создан файл с информацией об ошибке: {error_md.name}")
                 return False
         
         # Process audio files (WAV, MP3, etc.)
@@ -516,7 +555,7 @@ def process_file(file_path):
         print(f"Error processing file {file_path}: {str(e)}")
         return False
 
-def create_pdf_error_markdown(file_path, output_path, timestamp, error_message):
+def create_pdf_error_markdown(file_path, output_path, timestamp, error_message, command_output=None):
     """Create markdown file with error information for PDF processing"""
     try:
         # Generate error markdown filename
@@ -528,29 +567,45 @@ def create_pdf_error_markdown(file_path, output_path, timestamp, error_message):
             f.write(f"created: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"original_filename: {file_path.name}\n")
             f.write(f"error: PDF processing error\n")
+            f.write(f"processor: marker_single\n")
             f.write("---\n\n")
             
-            f.write(f"# Error processing PDF file {file_path.name}\n\n")
-            f.write(f"Processing date and time: {timestamp.replace('_', ' ')}\n\n")
+            f.write(f"# Ошибка обработки PDF файла {file_path.name}\n\n")
+            f.write(f"Дата и время обработки: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%d.%m.%Y %H:%M:%S')}\n\n")
             
-            f.write("## Error Details\n\n")
+            f.write("## Детали ошибки\n\n")
             f.write(f"{error_message}\n\n")
             
-            f.write("## Possible Error Causes\n\n")
-            f.write("- PDF file format not supported\n")
-            f.write("- PDF file is encrypted or protected\n")
-            f.write("- Error in the marker_single tool\n")
-            f.write("- Insufficient memory or resources\n")
+            # Добавляем вывод команды, если он доступен
+            if command_output:
+                f.write("## Вывод команды\n\n")
+                f.write("```\n")
+                f.write(command_output)
+                f.write("\n```\n\n")
             
-            f.write("\n## File Information\n\n")
-            f.write(f"- Filename: {file_path.name}\n")
-            f.write(f"- Size: {file_path.stat().st_size} bytes\n")
-            f.write(f"- Moved to: {output_path.name}\n")
+            f.write("## Возможные причины ошибки\n\n")
+            f.write("- PDF файл имеет неподдерживаемый формат\n")
+            f.write("- PDF файл зашифрован или защищен\n")
+            f.write("- Ошибка в инструменте marker_single\n")
+            f.write("- Недостаточно памяти или ресурсов для обработки\n")
+            f.write("- PDF файл содержит только изображения без текстового слоя\n")
+            f.write("- Проблемы с ключом API для LLM\n")
+            
+            f.write("\n## Информация о файле\n\n")
+            f.write(f"- Файл: {file_path.name}\n")
+            f.write(f"- Размер: {file_path.stat().st_size/1024:.2f} КБ\n")
+            f.write(f"- Перемещен в: {output_path.name}\n\n")
+            
+            f.write("## Что делать дальше\n\n")
+            f.write("1. Проверьте формат PDF файла\n")
+            f.write("2. Убедитесь, что файл не защищен паролем\n")
+            f.write("3. Проверьте наличие и правильность API ключа в .env файле\n")
+            f.write("4. Попробуйте обработать файл вручную командой `marker_single`\n")
         
-        print(f"Created error information markdown: {error_md_file.name}")
+        print(f"[INFO] Создан файл с информацией об ошибке: {error_md_file.name}")
         return error_md_file
     except Exception as e:
-        print(f"Error creating PDF error markdown: {str(e)}")
+        print(f"[ERROR] Ошибка создания файла с информацией об ошибке PDF: {str(e)}")
         return None
 
 def main():
@@ -604,6 +659,22 @@ if __name__ == "__main__":
     print("=" * 80)
     print("EchoFlow File Processor Service")
     print("Unified audio and PDF processor")
+    print("=" * 80)
+    
+    # Проверка наличия ключа Gemini API
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    if gemini_api_key:
+        print(f"[CONFIG] Найден ключ Gemini API: {gemini_api_key[:5]}...{gemini_api_key[-5:]}")
+        print("[CONFIG] PDF файлы будут обрабатываться с использованием LLM")
+    else:
+        print("[CONFIG] Ключ Gemini API не найден. PDF файлы будут обрабатываться без LLM.")
+        print("[CONFIG] Для улучшения качества обработки PDF добавьте ключ GEMINI_API_KEY в .env файл")
+    
+    # Дополнительная информация о конфигурации
+    print(f"[CONFIG] Каталог для мониторинга: {config['input_dir']}")
+    print(f"[CONFIG] Каталог для выходных файлов: {config['output_dir']}")
+    print(f"[CONFIG] Минимальный размер файла: {config['min_file_size']/1024:.1f} KB")
+    print(f"[CONFIG] Интервал проверки: {config['check_interval']} сек")
     print("=" * 80)
     
     main() 
