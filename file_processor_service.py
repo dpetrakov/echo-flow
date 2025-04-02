@@ -372,30 +372,30 @@ def process_file(file_path):
             new_name = f"{filename_prefix}_document{file_ext}"
             output_path = Path(config['output_dir']) / new_name
             
+            # Сначала перемещаем файл в новое место с новым именем
+            print(f"\n>>> Перемещение PDF файла в выходной каталог: {file_path.name} -> {output_path.name}")
+            shutil.move(str(file_path), str(output_path))
+            print(f"[SUCCESS] Файл успешно перемещен.")
+            
             # Создаем временный каталог для обработки с тем же именем, что и новый файл
             temp_dir = Path(config['output_dir']) / f"{filename_prefix}_document"
             if not temp_dir.exists():
                 temp_dir.mkdir(parents=True)
             
             # Process PDF directly
-            print(f"[PROCESSING] Обработка PDF файла: {file_path}")
-            pdf_processed, command_output = process_pdf_file(abs_file_path, str(temp_dir))
+            print(f"[PROCESSING] Обработка PDF файла: {output_path.name}")
+            pdf_processed, command_output = process_pdf_file(output_path, str(temp_dir))
             
             # Проверяем созданные файлы маркдаун
             output_md_files = list(temp_dir.glob("*.md"))
             
             if not pdf_processed or not output_md_files:
-                # Создаем файл с информацией об ошибке до перемещения исходного файла
+                # Создаем файл с информацией об ошибке
                 error_message = "PDF файл был обработан без ошибок, но маркдаун файл не был создан. Возможно, PDF документ пустой или содержит только изображения без текста."
                 error_md_file = create_pdf_error_markdown(file_path, output_path, timestamp, error_message, command_output)
             
-            # Move the original file to the output directory
-            print(f"\n>>> Перемещение исходного PDF-файла в выходной каталог: {file_path.name} -> {output_path.name}")
-            shutil.move(str(file_path), str(output_path))
-            print(f"[SUCCESS] Файл успешно перемещен.")
-            
             if pdf_processed and output_md_files:
-                print(f"\n>>> [SUCCESS] PDF файл {file_path.name} успешно обработан")
+                print(f"\n>>> [SUCCESS] PDF файл {output_path.name} успешно обработан")
                 for md_file in output_md_files:
                     # Добавляем метаданные в markdown файл
                     try:
@@ -438,10 +438,10 @@ def process_file(file_path):
                 return True
             else:
                 if error_md_file:
-                    print(f"\n>>> [WARNING] PDF файл {file_path.name} обработан, но маркдаун не создан")
+                    print(f"\n>>> [WARNING] PDF файл {output_path.name} обработан, но маркдаун не создан")
                     print(f"[INFO] Создан файл с информацией об ошибке: {error_md_file.name}")
                 else:
-                    print(f"\n>>> [ERROR] Ошибка обработки PDF файла {file_path.name}")
+                    print(f"\n>>> [ERROR] Ошибка обработки PDF файла {output_path.name}")
                 
                 # Удаляем временный каталог в случае ошибки
                 try:
