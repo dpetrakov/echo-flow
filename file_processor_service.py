@@ -140,13 +140,20 @@ def update_bat_file_with_timestamp(timestamp):
             content = f.read()
         
         # Create a backup
-        with open(run_bat_path.with_suffix(".bak"), "w", encoding="utf-8") as f:
+        backup_path = run_bat_path.with_suffix(".bak")
+        with open(backup_path, "w", encoding="utf-8") as f:
             f.write(content)
         
         # Set environment variable for timestamp
         os.environ["WHISPER_TIMESTAMP"] = timestamp
         
         print(f"[INFO] Set timestamp for WhisperX output files: {timestamp}")
+        
+        # Удаляем backup файл после использования
+        if backup_path.exists():
+            backup_path.unlink()
+            print("[INFO] Удален временный файл run.bak")
+            
         return True
     except Exception as e:
         print(f"[ERROR] Failed to update run.bat: {str(e)}")
@@ -302,22 +309,26 @@ def process_pdf_file(file_path, output_dir):
         print(f"[EXECUTING] Команда: {' '.join(command)}")
         print(f"[INFO] Используется прокси: {proxy_url}")
         
-        result = subprocess.run(
+        # Запускаем процесс с поддержкой разных кодировок
+        process = subprocess.Popen(
             command,
-            capture_output=True, 
-            text=True,
-            encoding='utf-8'
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding='utf-8',
+            errors='replace'  # Заменяем нечитаемые символы на специальный символ
         )
+        
+        stdout, stderr = process.communicate()
         
         # Подготавливаем вывод команды для логирования и возможного использования в отчете об ошибке
         command_output = ""
-        if result.stdout:
-            command_output += "STDOUT:\n" + result.stdout + "\n\n"
-        if result.stderr:
-            command_output += "STDERR:\n" + result.stderr
+        if stdout:
+            command_output += "STDOUT:\n" + stdout + "\n\n"
+        if stderr:
+            command_output += "STDERR:\n" + stderr
         
-        if result.returncode != 0:
-            print(f"[ERROR] Ошибка обработки PDF: {result.stderr}")
+        if process.returncode != 0:
+            print(f"[ERROR] Ошибка обработки PDF: {stderr}")
             return False, command_output
         
         # Проверяем создание файла в выходном каталоге
@@ -361,12 +372,20 @@ def process_file(file_path):
             new_name = f"{filename_prefix}_document{file_ext}"
             output_path = Path(config['output_dir']) / new_name
             
+            # Сначала создаем файл с информацией об ошибке, если он понадобится
+            error_md_file = None
+            
             # Process PDF directly
             print(f"[PROCESSING] Обработка PDF файла: {file_path}")
             pdf_processed, command_output = process_pdf_file(abs_file_path, config['output_dir'])
             
             # Проверяем созданные файлы маркдаун
             output_md_files = list(Path(config['output_dir']).glob(f"{file_path.stem}*.md"))
+            
+            if not pdf_processed or not output_md_files:
+                # Создаем файл с информацией об ошибке до перемещения исходного файла
+                error_message = "PDF файл был обработан без ошибок, но маркдаун файл не был создан. Возможно, PDF документ пустой или содержит только изображения без текста."
+                error_md_file = create_pdf_error_markdown(file_path, output_path, timestamp, error_message, command_output)
             
             # Move the original file to the output directory
             print(f"\n>>> Перемещение исходного PDF-файла в выходной каталог: {file_path.name} -> {output_path.name}")
@@ -378,19 +397,12 @@ def process_file(file_path):
                 for md_file in output_md_files:
                     print(f"[INFO] Создан файл маркдаун: {md_file.name}")
                 return True
-            elif pdf_processed:
-                # PDF обработан без ошибок, но файлы MD не найдены
-                error_message = "PDF файл был обработан без ошибок, но маркдаун файл не был создан. Возможно, PDF документ пустой или содержит только изображения без текста."
-                create_pdf_error_markdown(file_path, output_path, timestamp, error_message, command_output)
-                print(f"\n>>> [WARNING] PDF файл {file_path.name} обработан, но маркдаун не создан")
-                return False
             else:
-                # Create error markdown file
-                error_message = "Не удалось обработать PDF файл с помощью marker_single. Проверьте формат файла и попробуйте снова."
-                error_md = create_pdf_error_markdown(file_path, output_path, timestamp, error_message, command_output)
-                print(f"\n>>> [ERROR] Ошибка обработки PDF файла {file_path.name}")
-                if error_md:
-                    print(f"[INFO] Создан файл с информацией об ошибке: {error_md.name}")
+                if error_md_file:
+                    print(f"\n>>> [WARNING] PDF файл {file_path.name} обработан, но маркдаун не создан")
+                    print(f"[INFO] Создан файл с информацией об ошибке: {error_md_file.name}")
+                else:
+                    print(f"\n>>> [ERROR] Ошибка обработки PDF файла {file_path.name}")
                 return False
         
         # Process audio files (WAV, MP3, etc.)
@@ -456,7 +468,11 @@ def process_file(file_path):
         if json_file and not no_speech_detected:
             print("Found JSON file, starting conversion to Markdown...")
             if extract_segments_to_txt(json_file, txt_file):
-                group_and_format_dialog(txt_file, md_file, file_path.name, timestamp, duration)
+                if group_and_format_dialog(txt_file, md_file, file_path.name, timestamp, duration):
+                    # Удаляем formatted.txt после успешного создания markdown
+                    if txt_file.exists():
+                        txt_file.unlink()
+                        print(f"[INFO] Удален временный файл {txt_file.name}")
         else:
             if no_speech_detected:
                 print(f"[INFO] No active speech detected in the audio file")
