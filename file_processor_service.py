@@ -190,7 +190,7 @@ def check_no_speech(output):
     """Check if the output contains 'No active speech found in audio'"""
     return "No active speech found in audio" in output
 
-def group_and_format_dialog(input_file, output_md, original_filename, timestamp, duration):
+def group_and_format_dialog(input_file, output_md, original_filename, processed_filename, timestamp, duration):
     """Group and format dialog in Markdown format"""
     print(f"Formatting dialog to Markdown...")
     
@@ -235,7 +235,8 @@ def group_and_format_dialog(input_file, output_md, original_filename, timestamp,
             # Добавляем метаданные в формате Obsidian
             out.write("---\n")
             out.write(f"created: {formatted_date}\n")
-            out.write(f"original_filename: {original_filename}\n")
+            # Используем новый формат ссылки
+            out.write(f"original_filename: [[{processed_filename}|{original_filename}]]\n") 
             out.write(f"duration: {timedelta(seconds=duration)}\n")
             out.write("---\n\n")
             
@@ -327,6 +328,9 @@ def process_pdf_file(file_path, output_dir):
         if stderr:
             command_output += "STDERR:\n" + stderr
         
+        # Добавляем небольшую паузу перед проверкой файла
+        time.sleep(1) 
+            
         if process.returncode != 0:
             print(f"[ERROR] Ошибка обработки PDF: {stderr}")
             return False, command_output
@@ -403,7 +407,8 @@ def process_file(file_path):
                         metadata = (
                             "---\n"
                             f"created: {formatted_date}\n"
-                            f"original_filename: {file_path.name}\n"
+                            # Используем новый формат ссылки
+                            f"original_filename: [[{output_path.name}|{file_path.name}]]\n" 
                             f"processed_filename: {output_path.name}\n"
                             f"processor: marker_single\n"
                             "---\n\n"
@@ -499,7 +504,8 @@ def process_file(file_path):
         if json_file and not no_speech_detected:
             print("Found JSON file, starting conversion to Markdown...")
             if extract_segments_to_txt(json_file, txt_file):
-                if group_and_format_dialog(txt_file, md_file, file_path.name, timestamp, duration):
+                # Передаем output_path.name как processed_filename
+                if group_and_format_dialog(txt_file, md_file, file_path.name, output_path.name, timestamp, duration):
                     # Удаляем formatted.txt после успешного создания markdown
                     if txt_file.exists():
                         txt_file.unlink()
@@ -557,7 +563,8 @@ def process_file(file_path):
                     # Добавляем метаданные в формате Obsidian
                     f.write("---\n")
                     f.write(f"created: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    f.write(f"original_filename: {file_path.name}\n")
+                    # Используем новый формат ссылки
+                    f.write(f"original_filename: [[{output_path.name}|{file_path.name}]]\n") 
                     f.write(f"duration: {timedelta(seconds=duration)}\n")
                     f.write(f"error: {'No speech detected' if no_speech_detected else 'Processing error'}\n")
                     f.write("---\n\n")
@@ -566,7 +573,8 @@ def process_file(file_path):
                         f.write(f"# No speech detected in file {file_path.name}\n\n")
                         f.write(f"Processing date and time: {timestamp.replace('_', ' ')}\n\n")
                         f.write("## File Information\n\n")
-                        f.write(f"- Filename: {file_path.name}\n")
+                        # Используем новый формат ссылки
+                        f.write(f"- Filename: [[{output_path.name}|{file_path.name}]]\n") 
                         f.write(f"- Size: {file_path.stat().st_size} bytes\n")
                         f.write(f"- Moved to: {output_path.name}\n\n")
                         f.write("The audio file was processed, but no speech was detected. This could be due to:\n\n")
@@ -600,7 +608,8 @@ def process_file(file_path):
                         f.write("- Error in speaker identification\n")
                         
                         f.write("\n## File Information\n\n")
-                        f.write(f"- Filename: {file_path.name}\n")
+                        # Используем новый формат ссылки
+                        f.write(f"- Filename: [[{output_path.name}|{file_path.name}]]\n") 
                         f.write(f"- Size: {file_path.stat().st_size} bytes\n")
                         f.write(f"- Moved to: {output_path.name}\n")
                     
@@ -629,7 +638,8 @@ def create_pdf_error_markdown(file_path, output_path, timestamp, error_message, 
             # Добавляем метаданные в формате Obsidian
             f.write("---\n")
             f.write(f"created: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"original_filename: {file_path.name}\n")
+            # Используем новый формат ссылки
+            f.write(f"original_filename: [[{output_path.name}|{file_path.name}]]\n") 
             f.write(f"processed_filename: {output_path.name}\n")
             f.write(f"error: PDF processing error\n")
             f.write(f"processor: marker_single\n")
@@ -657,7 +667,8 @@ def create_pdf_error_markdown(file_path, output_path, timestamp, error_message, 
             f.write("- Проблемы с ключом API для LLM\n")
             
             f.write("\n## Информация о файле\n\n")
-            f.write(f"- Оригинальный файл: {file_path.name}\n")
+            # Используем новый формат ссылки
+            f.write(f"- Оригинальный файл: [[{output_path.name}|{file_path.name}]]\n") 
             f.write(f"- Обработанный файл: {output_path.name}\n")
             f.write(f"- Размер: {output_path.stat().st_size/1024:.2f} КБ\n")
             f.write(f"- Расположение: {output_path}\n\n")
