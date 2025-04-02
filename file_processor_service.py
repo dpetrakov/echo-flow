@@ -282,9 +282,7 @@ def process_pdf_file(file_path, output_dir):
             command.extend([
                 '--use_llm',                  # Включаем LLM для лучшего качества
                 '--gemini_api_key', gemini_api_key,
-                '--model_name', 'gemini-1.5-pro',  # Более мощная модель для лучшего качества
-                '--chunk_size', '10000',           # Увеличенный размер чанка для более полного контекста
-                '--clean_text'                     # Очистка текста от артефактов
+                '--model_name', 'gemini-1.5-pro'  # Более мощная модель для лучшего качества
             ])
         
         print(f"[EXECUTING] Команда: {' '.join(command)}")
