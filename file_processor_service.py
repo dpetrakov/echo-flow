@@ -17,7 +17,12 @@ def load_config():
         'input_dir': os.getenv('INPUT_DIR', 'input'),
         'output_dir': os.getenv('OUTPUT_DIR', 'output'),
         'check_interval': int(os.getenv('CHECK_INTERVAL', '5')),  # check interval in seconds
-        'min_file_size': int(os.getenv('MIN_FILE_SIZE_KB', '100')) * 1024  # Size in KB
+        'min_file_size': int(os.getenv('MIN_FILE_SIZE_KB', '100')) * 1024,  # Size in KB
+        'proxy_host': os.getenv('PROXY_HOST', '45.145.242.61'),
+        'proxy_port': os.getenv('PROXY_PORT', '6053'),
+        'proxy_user': os.getenv('PROXY_USER', 'user213471'),
+        'proxy_pass': os.getenv('PROXY_PASS', 'uv13w2'),
+        'gemini_model': os.getenv('GEMINI_MODEL', 'gemini-1.5-pro')
     }
 
 def ensure_directories():
@@ -278,7 +283,11 @@ def process_pdf_file(file_path, output_dir):
             command.extend([
                 '--use_llm',                  # Включаем LLM для лучшего качества
                 '--gemini_api_key', gemini_api_key,
-                '--model_name', 'gemini-2.5-pro-exp-03-25'  # Более мощная модель для лучшего качества
+                '--model_name', config['gemini_model'],
+                '--proxy_host', config['proxy_host'],
+                '--proxy_port', config['proxy_port'],
+                '--proxy_user', config['proxy_user'],
+                '--proxy_pass', config['proxy_pass']
             ])
         
         print(f"[EXECUTING] Команда: {' '.join(command)}")
