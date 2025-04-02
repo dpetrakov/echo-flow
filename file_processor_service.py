@@ -377,25 +377,17 @@ def process_file(file_path):
             shutil.move(str(file_path), str(output_path))
             print(f"[SUCCESS] Файл успешно перемещен.")
             
-            # Создаем временный каталог для обработки с тем же именем, что и новый файл
-            temp_dir = Path(config['output_dir']) / f"{filename_prefix}_document"
-            if not temp_dir.exists():
-                temp_dir.mkdir(parents=True)
-            
             # Process PDF directly
             print(f"[PROCESSING] Обработка PDF файла: {output_path.name}")
-            pdf_processed, command_output = process_pdf_file(output_path, str(temp_dir))
+            pdf_processed, command_output = process_pdf_file(output_path, str(Path(config['output_dir'])))
             
             # Проверяем созданные файлы маркдаун
-            output_md_files = list(temp_dir.glob("*.md"))
+            output_md_files = list(Path(config['output_dir']).glob(f"{filename_prefix}_document/*.md"))
             
             if not pdf_processed or not output_md_files:
                 # Создаем файл с информацией об ошибке
                 error_message = "PDF файл был обработан без ошибок, но маркдаун файл не был создан. Возможно, PDF документ пустой или содержит только изображения без текста."
                 error_md_file = create_pdf_error_markdown(file_path, output_path, timestamp, error_message, command_output)
-                
-                # Сохраняем временный каталог для анализа
-                print(f"[INFO] Временный каталог сохранен для анализа: {temp_dir}")
             else:
                 print(f"\n>>> [SUCCESS] PDF файл {output_path.name} успешно обработан")
                 for md_file in output_md_files:
@@ -424,18 +416,15 @@ def process_file(file_path):
                         print(f"[INFO] Добавлены метаданные в файл: {md_file.name}")
                     except Exception as e:
                         print(f"[WARNING] Не удалось добавить метаданные в файл {md_file.name}: {str(e)}")
-                    
-                    # Перемещаем markdown файл в основной каталог
-                    new_md_path = Path(config['output_dir']) / md_file.name
-                    shutil.move(str(md_file), str(new_md_path))
-                    print(f"[INFO] Перемещен файл markdown: {md_file.name} -> {new_md_path.name}")
                 
-                # Удаляем временный каталог только при успешной обработке
-                try:
-                    shutil.rmtree(temp_dir)
-                    print(f"[INFO] Удален временный каталог: {temp_dir}")
-                except Exception as e:
-                    print(f"[WARNING] Не удалось удалить временный каталог {temp_dir}: {str(e)}")
+                # Удаляем только временный JSON файл
+                temp_json = Path(config['output_dir']) / f"{filename_prefix}_document" / f"{filename_prefix}_document_meta.json"
+                if temp_json.exists():
+                    try:
+                        temp_json.unlink()
+                        print(f"[INFO] Удален временный файл: {temp_json.name}")
+                    except Exception as e:
+                        print(f"[WARNING] Не удалось удалить временный файл {temp_json.name}: {str(e)}")
                 
                 return True
             
