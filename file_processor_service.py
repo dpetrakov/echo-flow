@@ -393,8 +393,10 @@ def process_file(file_path):
                 # Создаем файл с информацией об ошибке
                 error_message = "PDF файл был обработан без ошибок, но маркдаун файл не был создан. Возможно, PDF документ пустой или содержит только изображения без текста."
                 error_md_file = create_pdf_error_markdown(file_path, output_path, timestamp, error_message, command_output)
-            
-            if pdf_processed and output_md_files:
+                
+                # Сохраняем временный каталог для анализа
+                print(f"[INFO] Временный каталог сохранен для анализа: {temp_dir}")
+            else:
                 print(f"\n>>> [SUCCESS] PDF файл {output_path.name} успешно обработан")
                 for md_file in output_md_files:
                     # Добавляем метаданные в markdown файл
@@ -428,7 +430,7 @@ def process_file(file_path):
                     shutil.move(str(md_file), str(new_md_path))
                     print(f"[INFO] Перемещен файл markdown: {md_file.name} -> {new_md_path.name}")
                 
-                # Удаляем временный каталог
+                # Удаляем временный каталог только при успешной обработке
                 try:
                     shutil.rmtree(temp_dir)
                     print(f"[INFO] Удален временный каталог: {temp_dir}")
@@ -436,22 +438,14 @@ def process_file(file_path):
                     print(f"[WARNING] Не удалось удалить временный каталог {temp_dir}: {str(e)}")
                 
                 return True
+            
+            if error_md_file:
+                print(f"\n>>> [WARNING] PDF файл {output_path.name} обработан, но маркдаун не создан")
+                print(f"[INFO] Создан файл с информацией об ошибке: {error_md_file.name}")
             else:
-                if error_md_file:
-                    print(f"\n>>> [WARNING] PDF файл {output_path.name} обработан, но маркдаун не создан")
-                    print(f"[INFO] Создан файл с информацией об ошибке: {error_md_file.name}")
-                else:
-                    print(f"\n>>> [ERROR] Ошибка обработки PDF файла {output_path.name}")
-                
-                # Удаляем временный каталог в случае ошибки
-                try:
-                    if temp_dir.exists():
-                        shutil.rmtree(temp_dir)
-                        print(f"[INFO] Удален временный каталог: {temp_dir}")
-                except Exception as e:
-                    print(f"[WARNING] Не удалось удалить временный каталог {temp_dir}: {str(e)}")
-                
-                return False
+                print(f"\n>>> [ERROR] Ошибка обработки PDF файла {output_path.name}")
+            
+            return False
         
         # Process audio files (WAV, MP3, etc.)
         # Get audio duration
@@ -647,11 +641,12 @@ def create_pdf_error_markdown(file_path, output_path, timestamp, error_message, 
             f.write("---\n")
             f.write(f"created: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"original_filename: {file_path.name}\n")
+            f.write(f"processed_filename: {output_path.name}\n")
             f.write(f"error: PDF processing error\n")
             f.write(f"processor: marker_single\n")
             f.write("---\n\n")
             
-            f.write(f"# Ошибка обработки PDF файла {file_path.name}\n\n")
+            f.write(f"# Ошибка обработки PDF файла {output_path.name}\n\n")
             f.write(f"Дата и время обработки: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%d.%m.%Y %H:%M:%S')}\n\n")
             
             f.write("## Детали ошибки\n\n")
@@ -673,15 +668,17 @@ def create_pdf_error_markdown(file_path, output_path, timestamp, error_message, 
             f.write("- Проблемы с ключом API для LLM\n")
             
             f.write("\n## Информация о файле\n\n")
-            f.write(f"- Файл: {file_path.name}\n")
-            f.write(f"- Размер: {file_path.stat().st_size/1024:.2f} КБ\n")
-            f.write(f"- Перемещен в: {output_path.name}\n\n")
+            f.write(f"- Оригинальный файл: {file_path.name}\n")
+            f.write(f"- Обработанный файл: {output_path.name}\n")
+            f.write(f"- Размер: {output_path.stat().st_size/1024:.2f} КБ\n")
+            f.write(f"- Расположение: {output_path}\n\n")
             
             f.write("## Что делать дальше\n\n")
             f.write("1. Проверьте формат PDF файла\n")
             f.write("2. Убедитесь, что файл не защищен паролем\n")
             f.write("3. Проверьте наличие и правильность API ключа в .env файле\n")
             f.write("4. Попробуйте обработать файл вручную командой `marker_single`\n")
+            f.write("5. Проверьте содержимое временного каталога для дополнительной информации\n")
         
         print(f"[INFO] Создан файл с информацией об ошибке: {error_md_file.name}")
         return error_md_file
