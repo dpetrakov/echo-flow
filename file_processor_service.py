@@ -335,8 +335,8 @@ def process_pdf_file(file_path, output_dir):
         output_dir_path = Path(output_dir)
         base_name = file_path.stem
         
-        # Ищем файл с расширением .md
-        output_file = output_dir_path / f"{base_name}.md"
+        # Ищем файл с расширением .md в правильном месте
+        output_file = output_dir_path / f"{base_name}" / f"{base_name}.md"
         
         if output_file.exists():
             print(f"[SUCCESS] Создан файл маркдаун: {output_file.name}")
