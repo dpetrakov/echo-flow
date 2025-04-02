@@ -319,15 +319,47 @@ def process_pdf_file(file_path, output_dir):
             print(f"[ERROR] Ошибка обработки PDF: {result.stderr}")
             return False, command_output
         
-        # Проверяем, появился ли файл MD в выходном каталоге
-        output_files = list(Path(output_dir).glob(f"{file_path.stem}*.md"))
+        # Проверяем созданные файлы в выходном каталоге
+        output_dir_path = Path(output_dir)
+        base_name = file_path.stem
+        
+        # Ищем файлы с разными возможными расширениями
+        possible_extensions = ['.md', '.markdown', '.txt']
+        output_files = []
+        
+        for ext in possible_extensions:
+            files = list(output_dir_path.glob(f"{base_name}{ext}"))
+            output_files.extend(files)
+        
+        if not output_files:
+            # Если файл не найден с расширением, ищем файл без расширения
+            files = list(output_dir_path.glob(f"{base_name}"))
+            output_files.extend(files)
+        
         if output_files:
-            print(f"[SUCCESS] Создан файл маркдаун: {output_files[0].name}")
+            # Если файл найден, проверяем его содержимое
+            output_file = output_files[0]
+            try:
+                with open(output_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if content.strip():  # Проверяем, что файл не пустой
+                        print(f"[SUCCESS] Создан файл маркдаун: {output_file.name}")
+                        # Если файл создан без расширения .md, добавляем его
+                        if not output_file.suffix.lower() in ['.md', '.markdown']:
+                            new_name = output_file.with_suffix('.md')
+                            output_file.rename(new_name)
+                            print(f"[INFO] Переименован файл в: {new_name.name}")
+                        return True, command_output
+                    else:
+                        print(f"[WARNING] Создан пустой файл: {output_file.name}")
+                        return False, command_output
+            except Exception as e:
+                print(f"[ERROR] Ошибка чтения файла {output_file.name}: {str(e)}")
+                return False, command_output
         else:
             print(f"[WARNING] Маркдаун файл не был создан, хотя команда завершилась успешно")
+            return False, command_output
         
-        print(f"[SUCCESS] PDF файл успешно обработан: {file_path}")
-        return True, command_output
     except Exception as e:
         error_msg = f"[ERROR] Ошибка запуска marker_single: {str(e)}"
         print(error_msg)
