@@ -268,6 +268,19 @@ def process_pdf_file(file_path, output_dir):
         else:
             print(f"[INFO] Найден API ключ Gemini. Будем использовать LLM для улучшения качества обработки PDF.")
         
+        # Устанавливаем переменные окружения для прокси
+        proxy_host = config['proxy_host']
+        proxy_port = config['proxy_port']
+        proxy_user = config['proxy_user']
+        proxy_pass = config['proxy_pass']
+        
+        # Формируем URL прокси
+        proxy_url = f"http://{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}"
+        
+        # Устанавливаем переменные окружения
+        os.environ['HTTPS_PROXY'] = proxy_url
+        os.environ['HTTP_PROXY'] = proxy_url
+        
         # Базовые параметры для marker_single
         command = [
             'marker_single',
@@ -283,14 +296,11 @@ def process_pdf_file(file_path, output_dir):
             command.extend([
                 '--use_llm',                  # Включаем LLM для лучшего качества
                 '--gemini_api_key', gemini_api_key,
-                '--model_name', config['gemini_model'],
-                '--proxy_host', config['proxy_host'],
-                '--proxy_port', config['proxy_port'],
-                '--proxy_user', config['proxy_user'],
-                '--proxy_pass', config['proxy_pass']
+                '--model_name', config['gemini_model']
             ])
         
         print(f"[EXECUTING] Команда: {' '.join(command)}")
+        print(f"[INFO] Используется прокси: {proxy_url}")
         
         result = subprocess.run(
             command,
