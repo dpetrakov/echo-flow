@@ -372,15 +372,17 @@ def process_file(file_path):
             new_name = f"{filename_prefix}_document{file_ext}"
             output_path = Path(config['output_dir']) / new_name
             
-            # Сначала создаем файл с информацией об ошибке, если он понадобится
-            error_md_file = None
+            # Создаем временный каталог для обработки с тем же именем, что и новый файл
+            temp_dir = Path(config['output_dir']) / f"{filename_prefix}_document"
+            if not temp_dir.exists():
+                temp_dir.mkdir(parents=True)
             
             # Process PDF directly
             print(f"[PROCESSING] Обработка PDF файла: {file_path}")
-            pdf_processed, command_output = process_pdf_file(abs_file_path, config['output_dir'])
+            pdf_processed, command_output = process_pdf_file(abs_file_path, str(temp_dir))
             
             # Проверяем созданные файлы маркдаун
-            output_md_files = list(Path(config['output_dir']).glob(f"{file_path.stem}*.md"))
+            output_md_files = list(temp_dir.glob("*.md"))
             
             if not pdf_processed or not output_md_files:
                 # Создаем файл с информацией об ошибке до перемещения исходного файла
@@ -395,7 +397,44 @@ def process_file(file_path):
             if pdf_processed and output_md_files:
                 print(f"\n>>> [SUCCESS] PDF файл {file_path.name} успешно обработан")
                 for md_file in output_md_files:
-                    print(f"[INFO] Создан файл маркдаун: {md_file.name}")
+                    # Добавляем метаданные в markdown файл
+                    try:
+                        with md_file.open("r", encoding="utf-8") as f:
+                            content = f.read()
+                        
+                        # Форматированная дата и время для метаданных
+                        formatted_date = datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # Создаем метаданные
+                        metadata = (
+                            "---\n"
+                            f"created: {formatted_date}\n"
+                            f"original_filename: {file_path.name}\n"
+                            f"processed_filename: {output_path.name}\n"
+                            f"processor: marker_single\n"
+                            "---\n\n"
+                        )
+                        
+                        # Записываем обновленное содержимое
+                        with md_file.open("w", encoding="utf-8") as f:
+                            f.write(metadata + content)
+                        
+                        print(f"[INFO] Добавлены метаданные в файл: {md_file.name}")
+                    except Exception as e:
+                        print(f"[WARNING] Не удалось добавить метаданные в файл {md_file.name}: {str(e)}")
+                    
+                    # Перемещаем markdown файл в основной каталог
+                    new_md_path = Path(config['output_dir']) / md_file.name
+                    shutil.move(str(md_file), str(new_md_path))
+                    print(f"[INFO] Перемещен файл markdown: {md_file.name} -> {new_md_path.name}")
+                
+                # Удаляем временный каталог
+                try:
+                    shutil.rmtree(temp_dir)
+                    print(f"[INFO] Удален временный каталог: {temp_dir}")
+                except Exception as e:
+                    print(f"[WARNING] Не удалось удалить временный каталог {temp_dir}: {str(e)}")
+                
                 return True
             else:
                 if error_md_file:
@@ -403,6 +442,15 @@ def process_file(file_path):
                     print(f"[INFO] Создан файл с информацией об ошибке: {error_md_file.name}")
                 else:
                     print(f"\n>>> [ERROR] Ошибка обработки PDF файла {file_path.name}")
+                
+                # Удаляем временный каталог в случае ошибки
+                try:
+                    if temp_dir.exists():
+                        shutil.rmtree(temp_dir)
+                        print(f"[INFO] Удален временный каталог: {temp_dir}")
+                except Exception as e:
+                    print(f"[WARNING] Не удалось удалить временный каталог {temp_dir}: {str(e)}")
+                
                 return False
         
         # Process audio files (WAV, MP3, etc.)
