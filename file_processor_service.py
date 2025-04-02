@@ -381,8 +381,8 @@ def process_file(file_path):
             print(f"[PROCESSING] Обработка PDF файла: {output_path.name}")
             pdf_processed, command_output = process_pdf_file(output_path, str(Path(config['output_dir'])))
             
-            # Проверяем созданные файлы маркдаун
-            output_md_files = list(Path(config['output_dir']).glob(f"{filename_prefix}_document/{filename_prefix}_document/{filename_prefix}_document.md"))
+            # Проверяем созданные файлы маркдаун в правильном месте
+            output_md_files = list(Path(config['output_dir']).glob(f"{filename_prefix}_document/{filename_prefix}_document.md"))
             
             if not pdf_processed or not output_md_files:
                 # Создаем файл с информацией об ошибке
@@ -417,8 +417,8 @@ def process_file(file_path):
                     except Exception as e:
                         print(f"[WARNING] Не удалось добавить метаданные в файл {md_file.name}: {str(e)}")
                 
-                # Удаляем только временный JSON файл
-                temp_json = Path(config['output_dir']) / f"{filename_prefix}_document" / f"{filename_prefix}_document" / f"{filename_prefix}_document_meta.json"
+                # Удаляем только временный JSON файл из правильного места
+                temp_json = Path(config['output_dir']) / f"{filename_prefix}_document" / f"{filename_prefix}_document_meta.json"
                 if temp_json.exists():
                     try:
                         temp_json.unlink()
