@@ -272,7 +272,7 @@ def process_pdf_file(file_path, output_dir):
             '--disable_tqdm',               # Отключаем прогресс-бары для фонового процесса
             '--max_concurrency', '3',       # Оптимальное количество параллельных запросов
             '--force_ocr',                  # Принудительно использовать OCR для всех страниц
-            '--ocr_languages', 'rus+eng',   # Поддержка русского и английского языков для OCR
+            '--languages', 'rus+eng',       # Поддержка русского и английского языков для OCR
             '--extract_images',             # Извлекать изображения из PDF
             '--extract_tables'              # Извлекать таблицы из PDF
         ]
@@ -285,8 +285,7 @@ def process_pdf_file(file_path, output_dir):
                 '--model_name', 'gemini-1.5-pro',  # Более мощная модель для лучшего качества
                 '--temperature', '0.1',            # Низкая температура для более детерминированных ответов
                 '--chunk_size', '10000',           # Увеличенный размер чанка для более полного контекста
-                '--clean_text',                    # Очистка текста от артефактов
-                '--use_llm_for_table_extraction'   # Использовать LLM для извлечения таблиц
+                '--clean_text'                     # Очистка текста от артефактов
             ])
         
         print(f"[EXECUTING] Команда: {' '.join(command)}")
