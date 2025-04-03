@@ -604,10 +604,13 @@ def process_file(file_path):
         
         # Run processing through run.bat
         print(f"Running script: run.bat {abs_file_path}")
-        subprocess_result = subprocess.run(['run.bat', str(abs_file_path)], 
-                                          check=True, 
-                                          capture_output=True, 
-                                          text=True)
+        output_dir_abs = config['output_dir'] # Получаем абсолютный путь из конфига
+        subprocess_result = subprocess.run(
+            ['run.bat', str(abs_file_path), output_dir_abs], # Передаем output_dir_abs как аргумент
+            check=True, 
+            capture_output=True, 
+            text=True
+        )
         print(f"run.bat output:\n{subprocess_result.stdout}")
         if subprocess_result.stderr:
             print(f"run.bat errors:\n{subprocess_result.stderr}")

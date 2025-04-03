@@ -12,17 +12,26 @@ if "%~1"=="" (
 set AUDIO_FILE=%~1
 echo [INFO] Processing audio file: %AUDIO_FILE%
 
+:: Check if output directory is provided as argument
+set ARG_OUTPUT_DIR=%~2
+
 :: Load environment variables from .env file
 for /f "tokens=*" %%a in (.env) do (
     set %%a
 )
 
-:: Set output directory from environment or use default
-if "%OUTPUT_DIR%"=="" (
-    set OUTPUT_DIR=%~dp0output
-    echo [INFO] OUTPUT_DIR not set in .env, using default: %OUTPUT_DIR%
+:: Set output directory based on argument, then environment, then default
+if not "%ARG_OUTPUT_DIR%"=="" (
+    :: Use argument if provided
+    set OUTPUT_DIR=%ARG_OUTPUT_DIR%
+    echo [INFO] Using provided OUTPUT_DIR argument: %OUTPUT_DIR%
+) else if not "%OUTPUT_DIR%"=="" (
+    :: Use environment variable if argument not provided
+    echo [INFO] Using OUTPUT_DIR from .env: %OUTPUT_DIR%
 ) else (
-    echo [INFO] OUTPUT_DIR: %OUTPUT_DIR%
+    :: Use default if argument and environment variable are missing
+    set OUTPUT_DIR=%~dp0output
+    echo [INFO] OUTPUT_DIR not set in .env or args, using default: %OUTPUT_DIR%
 )
 
 :: Model and other parameters
@@ -57,6 +66,7 @@ set OUTPUT_PREFIX=%BASE_FILENAME%_%TIMESTAMP%
 echo [INFO] Output files will use prefix: %OUTPUT_PREFIX%
 
 :: Run whisperx with diarization
+:: Using %OUTPUT_DIR% which is now determined by argument > env > default
 python -m whisperx "%AUDIO_FILE%" ^
 --model %MODEL% ^
 --language %LANGUAGE% ^
