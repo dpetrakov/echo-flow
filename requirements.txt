@@ -16,3 +16,8 @@ PyMuPDF>=1.23.8
 # Зависимости для обработки аудио (опционально)
 # pyannote.audio>=3.3.2
 # git+https://github.com/m-bain/whisperx.git 
+
+# Зависимости для LLM метаданных
+PyYAML>=6.0 # Для парсинга frontmatter
+openai>=1.0 # Для OpenRouter API
+httpx>=0.25 # Для прокси в openai SDK (опционально) 

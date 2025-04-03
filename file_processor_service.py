@@ -9,29 +9,61 @@ from dotenv import load_dotenv
 import subprocess
 import os.path
 import calendar
+import yaml
+from yaml.scanner import ScannerError
+import metadata_processor
 
 def load_config():
     """Load configuration from .env file"""
     load_dotenv()
+    
+    vault_root = Path(os.getenv('OBSIDIAN_VAULT_ROOT'))
+    if not vault_root.is_dir():
+        # Если корень не указан или не существует, используем текущий каталог
+        print(f"[WARNING] OBSIDIAN_VAULT_ROOT не найден или не является каталогом. Пути будут относиться к текущему каталогу.")
+        vault_root = Path('.').resolve() 
+
+    input_dir_rel = os.getenv('INPUT_DIR', 'input')
+    output_dir_rel = os.getenv('OUTPUT_DIR', 'output')
+    prompt_file_rel = os.getenv('PROMPT_FILE_PATH', 'prompts/autodetect.project.md')
+
+    # Формируем абсолютные пути
+    input_dir_abs = (vault_root / input_dir_rel).resolve()
+    output_dir_abs = (vault_root / output_dir_rel).resolve()
+    prompt_file_abs = (vault_root / prompt_file_rel).resolve()
+    
+    # Создаем каталоги, если их нет (для input и output)
+    input_dir_abs.mkdir(parents=True, exist_ok=True)
+    output_dir_abs.mkdir(parents=True, exist_ok=True)
+    # Для файла промпта проверяем только существование родительского каталога
+    prompt_file_abs.parent.mkdir(parents=True, exist_ok=True)
+    
     return {
-        'input_dir': os.getenv('INPUT_DIR', 'input'),
-        'output_dir': os.getenv('OUTPUT_DIR', 'output'),
+        'input_dir': str(input_dir_abs),
+        'output_dir': str(output_dir_abs),
         'check_interval': int(os.getenv('CHECK_INTERVAL', '5')),  # check interval in seconds
         'min_file_size': int(os.getenv('MIN_FILE_SIZE_KB', '100')) * 1024,  # Size in KB
         'proxy_host': os.getenv('PROXY_HOST', '45.145.242.61'),
         'proxy_port': os.getenv('PROXY_PORT', '6053'),
         'proxy_user': os.getenv('PROXY_USER', 'user213471'),
         'proxy_pass': os.getenv('PROXY_PASS', 'uv13w2'),
-        'gemini_model': os.getenv('GEMINI_MODEL', 'gemini-1.5-pro')
+        'gemini_model': os.getenv('GEMINI_MODEL', 'gemini-1.5-pro'),
+        'openrouter_api_key': os.getenv('OPENROUTER_API_KEY'),
+        'openrouter_model': os.getenv('OPENROUTER_MODEL', 'gemini-2.5-pro-exp-03-25'), 
+        'prompt_file_path': str(prompt_file_abs), 
+        'metadata_check_interval': int(os.getenv('METADATA_CHECK_INTERVAL', '300')) 
     }
 
 def ensure_directories():
     """Create required directories if they don't exist"""
-    for dir_name in [config['input_dir'], config['output_dir']]:
-        dir_path = Path(dir_name)
-        if not dir_path.exists():
-            dir_path.mkdir(parents=True)
-            print(f"Directory created: {dir_path}")
+    # Теперь создание каталогов происходит в load_config
+    # эту функцию можно либо удалить, либо оставить пустой для обратной совместимости
+    pass 
+    # for dir_name in [config['input_dir'], config['output_dir']]:
+    #     dir_path = Path(dir_name)
+    #     if not dir_path.exists():
+    #         dir_path.mkdir(parents=True)
+    #         print(f"Directory created: {dir_path}")
 
 def log_files_in_dir(directory):
     """Log files in the specified directory"""
@@ -686,16 +718,105 @@ def create_pdf_error_markdown(file_path, output_path, timestamp, error_message, 
         print(f"[ERROR] Ошибка создания файла с информацией об ошибке PDF: {str(e)}")
         return None
 
+# --- Функции для проверки метаданных ---
+
+def parse_frontmatter(file_path):
+    """Parse YAML frontmatter from a Markdown file."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Проверяем, есть ли frontmatter (окружен ---)
+        if content.startswith('---'):
+            parts = content.split('---', 2)
+            if len(parts) >= 3:
+                frontmatter_str = parts[1]
+                main_content = parts[2]
+                try:
+                    metadata = yaml.safe_load(frontmatter_str)
+                    # Убедимся, что metadata это словарь
+                    if not isinstance(metadata, dict):
+                        print(f"[WARNING] Frontmatter в файле {file_path.name} не является словарем YAML. Пропускаем.")
+                        return None, main_content # Возвращаем None для метаданных
+                    return metadata, main_content
+                except ScannerError as e:
+                    print(f"[ERROR] Ошибка парсинга YAML frontmatter в файле {file_path.name}: {e}")
+                    return None, content # Возвращаем None если парсинг не удался
+        
+        # Если нет frontmatter или он некорректный
+        print(f"[INFO] Frontmatter не найден или некорректен в файле: {file_path.name}")
+        return {}, content # Возвращаем пустой словарь и весь контент
+
+    except Exception as e:
+        print(f"[ERROR] Не удалось прочитать файл {file_path.name} для парсинга frontmatter: {e}")
+        return None, None # Возвращаем None, если файл не прочитался
+
+def check_and_process_metadata(output_dir, config):
+    """Check .md files in output_dir for required metadata and trigger LLM processing if needed."""
+    print(f"--- Запуск проверки метаданных в каталоге {output_dir} ---")
+    output_path = Path(output_dir)
+    processed_count = 0
+    llm_triggered_count = 0
+
+    # Проверяем наличие ключа API и файла промпта перед сканированием
+    if not config.get('openrouter_api_key'):
+        print("[WARNING] Ключ OPENROUTER_API_KEY не найден в .env. Автоматическое определение метаданных будет пропущено.")
+        return
+    
+    prompt_file = Path(config.get('prompt_file_path', ''))
+    if not prompt_file.exists():
+         print(f"[WARNING] Файл промпта '{prompt_file}' не найден. Автоматическое определение метаданных будет пропущено.")
+         return
+
+    for md_file in output_path.glob('*.md'):
+        if md_file.is_file():
+            processed_count += 1
+            print(f"Проверка файла: {md_file.name}")
+            metadata, _ = parse_frontmatter(md_file)
+
+            if metadata is None: # Ошибка чтения или парсинга файла
+                print(f"[SKIPPING] Пропуск файла {md_file.name} из-за ошибки чтения/парсинга.")
+                continue
+            
+            # Проверяем наличие обязательных полей
+            # 'клиент' опционален, остальные обязательны, но 'проект' триггерит LLM
+            required_keys = {'группа', 'проект', 'событие/назначение'} 
+            missing_keys = required_keys - set(metadata.keys())
+
+            if 'проект' in missing_keys:
+                print(f"[INFO] В файле {md_file.name} отсутствует 'проект'. Запуск обработки LLM...")
+                try:
+                    # Вызываем функцию из metadata_processor
+                    logger = metadata_processor.logger # Используем логгер из другого модуля
+                    # Устанавливаем уровень DEBUG если нужно подробное логирование
+                    # logger.setLevel(logging.DEBUG) 
+                    metadata_processor.process_single_file(str(md_file), config, verbose=True) # verbose=True для подробного лога
+                    llm_triggered_count += 1
+                except ImportError:
+                    print("[ERROR] Не удалось импортировать модуль metadata_processor. Убедитесь, что файл metadata_processor.py находится в том же каталоге.")
+                except Exception as e:
+                    print(f"[ERROR] Ошибка при вызове обработчика LLM для файла {md_file.name}: {e}")
+            elif missing_keys:
+                # Другие ключи отсутствуют, но проект есть - просто предупреждение
+                 print(f"[WARNING] В файле {md_file.name} отсутствуют метаданные: {', '.join(missing_keys)}")
+            else:
+                print(f"[OK] Все необходимые метаданные присутствуют в файле: {md_file.name}")
+
+    print(f"--- Проверка метаданных завершена. Проверено файлов: {processed_count}. Запущено LLM: {llm_triggered_count} ---")
+
 def main():
     """Main service loop"""
     print(f"Service started. Monitoring directory: {config['input_dir']}")
     print(f"Files will be processed and saved to: {config['output_dir']}")
     print(f"Minimum file size: {config['min_file_size']/1024} KB")
     print(f"Supported formats: WAV, MP3, PDF")
+    print(f"Metadata check interval: {config['metadata_check_interval']} seconds")
     
     # Create necessary directories at startup
     ensure_directories()
     
+    last_metadata_check_time = time.time() # Время последней проверки метаданных
+
     while True:
         try:
             # Check for new files
@@ -704,30 +825,39 @@ def main():
                 if file_path.is_file():
                     # Ignore syncthing temporary files
                     if file_path.name.startswith("~syncthing~") and file_path.name.endswith(".tmp"):
-                        print(f"Ignoring syncthing temporary file: {file_path.name}")
+                        # print(f"Ignoring syncthing temporary file: {file_path.name}") # Слишком много логов
                         continue
                     
                     # Check file size
                     file_size = file_path.stat().st_size
                     if file_size < config['min_file_size']:
-                        print(f"File {file_path.name} is too small ({file_size/1024:.2f} KB < {config['min_file_size']/1024} KB), skipping.")
+                        # print(f"File {file_path.name} is too small ({file_size/1024:.2f} KB < {config['min_file_size']/1024} KB), skipping.")
                         continue
                     
                     # Check file extension
                     file_ext = file_path.suffix.lower()
                     if file_ext not in ['.wav', '.mp3', '.pdf']:
-                        print(f"Unsupported file type: {file_ext}, skipping file: {file_path.name}")
+                        # print(f"Unsupported file type: {file_ext}, skipping file: {file_path.name}")
                         continue
                         
                     print(f"New file detected: {file_path.name} ({file_size/1024:.2f} KB)")
-                    process_file(file_path)
+                    process_file(file_path) # Обрабатываем новый файл немедленно
             
+            # Периодическая проверка метаданных
+            current_time = time.time()
+            if current_time - last_metadata_check_time >= config['metadata_check_interval']:
+                check_and_process_metadata(config['output_dir'], config)
+                last_metadata_check_time = current_time
+
             # Wait before next check
             time.sleep(config['check_interval'])
             
         except Exception as e:
-            print(f"Error in main loop: {str(e)}")
-            time.sleep(config['check_interval'])
+            print(f"[ERROR] Ошибка в главном цикле: {str(e)}")
+            # Добавим traceback для лучшей диагностики
+            import traceback
+            traceback.print_exc()
+            time.sleep(config['check_interval'] * 5) # Увеличим паузу при ошибке
 
 if __name__ == "__main__":
     # Configuration loaded at startup
@@ -736,23 +866,34 @@ if __name__ == "__main__":
     # Print startup banner
     print("=" * 80)
     print("EchoFlow File Processor Service")
-    print("Unified audio and PDF processor")
+    print("Unified audio and PDF processor with Metadata Enrichment") # Обновили название
     print("=" * 80)
     
     # Проверка наличия ключа Gemini API
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     if gemini_api_key:
-        print(f"[CONFIG] Найден ключ Gemini API: {gemini_api_key[:5]}...{gemini_api_key[-5:]}")
-        print("[CONFIG] PDF файлы будут обрабатываться с использованием LLM")
+        print(f"[CONFIG] Найден ключ Gemini API: ...{gemini_api_key[-5:]}")
+        print("[CONFIG] PDF файлы будут обрабатываться с использованием LLM (Gemini)")
     else:
         print("[CONFIG] Ключ Gemini API не найден. PDF файлы будут обрабатываться без LLM.")
-        print("[CONFIG] Для улучшения качества обработки PDF добавьте ключ GEMINI_API_KEY в .env файл")
     
+    # Проверка наличия ключа OpenRouter API
+    openrouter_api_key = config.get('openrouter_api_key')
+    if openrouter_api_key:
+         print(f"[CONFIG] Найден ключ OpenRouter API: ...{openrouter_api_key[-5:]}")
+         print(f"[CONFIG] Модель OpenRouter для метаданных: {config['openrouter_model']}")
+         print(f"[CONFIG] Файл промпта для метаданных: {config['prompt_file_path']}")
+         print("[CONFIG] Автоматическое определение метаданных включено.")
+    else:
+        print("[CONFIG] Ключ OPENROUTER_API_KEY не найден. Автоматическое определение метаданных отключено.")
+        print("[CONFIG] Добавьте ключ OPENROUTER_API_KEY и PROMPT_FILE_PATH в .env для включения.")
+
     # Дополнительная информация о конфигурации
     print(f"[CONFIG] Каталог для мониторинга: {config['input_dir']}")
     print(f"[CONFIG] Каталог для выходных файлов: {config['output_dir']}")
     print(f"[CONFIG] Минимальный размер файла: {config['min_file_size']/1024:.1f} KB")
-    print(f"[CONFIG] Интервал проверки: {config['check_interval']} сек")
+    print(f"[CONFIG] Интервал проверки новых файлов: {config['check_interval']} сек")
+    print(f"[CONFIG] Интервал проверки метаданных: {config['metadata_check_interval']} сек")
     print("=" * 80)
     
     main() 
@@ -760,3 +901,4 @@ if __name__ == "__main__":
 
     # TODO: удалять аудио файлы старше недели из processed
     # TODO: добавить обработку других форматов аудио
+    # TODO: Реализовать вызов metadata_processor.py из check_and_process_metadata --- DONE
