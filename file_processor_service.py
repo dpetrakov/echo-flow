@@ -39,6 +39,7 @@ def load_config():
     prompt_file_abs.parent.mkdir(parents=True, exist_ok=True)
     
     return {
+        'vault_root': str(vault_root),
         'input_dir': str(input_dir_abs),
         'output_dir': str(output_dir_abs),
         'check_interval': int(os.getenv('CHECK_INTERVAL', '5')),  # check interval in seconds
@@ -386,18 +387,113 @@ def process_pdf_file(file_path, output_dir):
         print(error_msg)
         return False, error_msg
 
+def parse_frontmatter(file_path):
+    """Parse YAML frontmatter from a Markdown file."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Проверяем, есть ли frontmatter (окружен ---)
+        if content.startswith('---'):
+            parts = content.split('---', 2)
+            if len(parts) >= 3:
+                frontmatter_str = parts[1]
+                main_content = parts[2]
+                try:
+                    metadata = yaml.safe_load(frontmatter_str)
+                    # Убедимся, что metadata это словарь
+                    if not isinstance(metadata, dict):
+                        print(f"[WARNING] Frontmatter в файле {file_path.name} не является словарем YAML. Пропускаем.")
+                        return None, main_content # Возвращаем None для метаданных
+                    return metadata, main_content
+                except ScannerError as e:
+                    print(f"[ERROR] Ошибка парсинга YAML frontmatter в файле {file_path.name}: {e}")
+                    return None, content # Возвращаем None если парсинг не удался
+        
+        # Если нет frontmatter или он некорректный
+        print(f"[INFO] Frontmatter не найден или некорректен в файле: {file_path.name}")
+        return {}, content # Возвращаем пустой словарь и весь контент
+
+    except Exception as e:
+        print(f"[ERROR] Не удалось прочитать файл {file_path.name} для парсинга frontmatter: {e}")
+        return None, None # Возвращаем None, если файл не прочитался
+
+def check_single_md_metadata(md_file: Path, config: dict):
+    """Checks a single MD file for required metadata and triggers LLM if needed."""
+    if not md_file.is_file():
+        print(f"[WARNING] Файл {md_file.name} не найден или не является файлом. Пропуск проверки метаданных.")
+        return False # Не триггерили LLM
+
+    print(f"Проверка метаданных файла: {md_file.name}")
+    metadata, _ = parse_frontmatter(md_file)
+
+    if metadata is None: # Ошибка чтения или парсинга файла
+        print(f"[SKIPPING] Пропуск файла {md_file.name} из-за ошибки чтения/парсинга.")
+        return False
+    
+    required_keys = {'группа', 'проект', 'событие/назначение'} 
+    missing_keys = required_keys - set(metadata.keys())
+
+    llm_triggered = False
+    if 'проект' in missing_keys:
+        print(f"[INFO] В файле {md_file.name} отсутствует 'проект'. Запуск обработки LLM...")
+        try:
+            # Проверяем наличие API ключа перед вызовом
+            if not config.get('openrouter_api_key'):
+                print("[WARNING] Ключ OPENROUTER_API_KEY не найден в .env. Вызов LLM пропущен.")
+                return False
+            # Проверяем наличие файла промпта перед вызовом
+            prompt_file = Path(config.get('prompt_file_path', ''))
+            if not prompt_file.exists():
+                print(f"[WARNING] Файл промпта '{prompt_file}' не найден. Вызов LLM пропущен.")
+                return False
+
+            # Вызываем функцию из metadata_processor
+            logger = metadata_processor.logger 
+            # Устанавливаем verbose=True для детального лога при необходимости
+            metadata_processor.process_single_file(str(md_file), config, verbose=True) 
+            llm_triggered = True
+        except ImportError:
+            print("[ERROR] Не удалось импортировать модуль metadata_processor.")
+        except Exception as e:
+            print(f"[ERROR] Ошибка при вызове обработчика LLM для файла {md_file.name}: {e}")
+    elif missing_keys:
+         print(f"[WARNING] В файле {md_file.name} отсутствуют метаданные: {', '.join(missing_keys)} (кроме 'проект')")
+    else:
+        print(f"[OK] Все необходимые метаданные присутствуют в файле: {md_file.name}")
+        
+    return llm_triggered
+
+def check_and_process_metadata(output_dir, config):
+    """Periodically check all .md files in output_dir for required metadata."""
+    print(f"--- Запуск периодической проверки метаданных в каталоге {output_dir} ---")
+    output_path = Path(output_dir)
+    processed_count = 0
+    llm_triggered_count = 0
+
+    # Проверки ключа и файла промпта теперь внутри check_single_md_metadata
+
+    for md_file in output_path.glob('*.md'):
+        if md_file.is_file():
+            processed_count += 1
+            if check_single_md_metadata(md_file, config):
+                 llm_triggered_count += 1
+
+    print(f"--- Периодическая проверка метаданных завершена. Проверено файлов: {processed_count}. Запущено LLM: {llm_triggered_count} ---")
+
 def process_file(file_path):
-    """Process a single file"""
+    """Process a single file (audio or PDF)"""
     try:
         # Get absolute path to the file
         abs_file_path = file_path.resolve()
         file_name = file_path.stem
         file_ext = file_path.suffix.lower()
-        
-        # Create a single timestamp for all files in this processing
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         print(f"\n>>> Starting to process file: {abs_file_path} [Session: {timestamp}]")
         
+        output_dir = Path(config['output_dir'])
+        md_file_to_check = None # Переменная для хранения пути к MD файлу для немедленной проверки
+
         # Generate new filename prefix based on file type
         if file_ext == '.pdf':
             # For PDF files, we don't need audio duration
@@ -474,7 +570,6 @@ def process_file(file_path):
             return False
         
         # Process audio files (WAV, MP3, etc.)
-        # Get audio duration
         duration = get_audio_duration(abs_file_path)
         print(f"Audio duration: {timedelta(seconds=duration)}")
         
@@ -542,6 +637,7 @@ def process_file(file_path):
                     if txt_file.exists():
                         txt_file.unlink()
                         print(f"[INFO] Удален временный файл {txt_file.name}")
+                    md_file_to_check = md_file # Указываем файл для проверки
         else:
             if no_speech_detected:
                 print(f"[INFO] No active speech detected in the audio file")
@@ -562,7 +658,7 @@ def process_file(file_path):
         intermediate_files = find_whisperx_outputs(output_dir, file_name, timestamp)
         
         # Check if MD file was created
-        md_created = md_file and md_file.exists()
+        md_created = md_file_to_check and md_file_to_check.exists()
         
         if intermediate_files:
             print(f"Found {len(intermediate_files)} intermediate files:")
@@ -655,9 +751,19 @@ def process_file(file_path):
             except Exception as e:
                 print(f"Error creating error information MD file: {str(e)}")
         
+        # --- Немедленная проверка метаданных для созданного MD файла ---            
+        if md_file_to_check and md_file_to_check.exists():
+            print(f"\n--- Запуск немедленной проверки метаданных для {md_file_to_check.name} ---")
+            check_single_md_metadata(md_file_to_check, config)
+            print(f"--- Немедленная проверка метаданных для {md_file_to_check.name} завершена ---")
+        # --- Конец немедленной проверки --- 
+            
         return True
     except Exception as e:
         print(f"Error processing file {file_path}: {str(e)}")
+        # Добавим traceback для лучшей диагностики
+        import traceback
+        traceback.print_exc()
         return False
 
 def create_pdf_error_markdown(file_path, output_path, timestamp, error_message, command_output=None):
@@ -718,92 +824,6 @@ def create_pdf_error_markdown(file_path, output_path, timestamp, error_message, 
         print(f"[ERROR] Ошибка создания файла с информацией об ошибке PDF: {str(e)}")
         return None
 
-# --- Функции для проверки метаданных ---
-
-def parse_frontmatter(file_path):
-    """Parse YAML frontmatter from a Markdown file."""
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Проверяем, есть ли frontmatter (окружен ---)
-        if content.startswith('---'):
-            parts = content.split('---', 2)
-            if len(parts) >= 3:
-                frontmatter_str = parts[1]
-                main_content = parts[2]
-                try:
-                    metadata = yaml.safe_load(frontmatter_str)
-                    # Убедимся, что metadata это словарь
-                    if not isinstance(metadata, dict):
-                        print(f"[WARNING] Frontmatter в файле {file_path.name} не является словарем YAML. Пропускаем.")
-                        return None, main_content # Возвращаем None для метаданных
-                    return metadata, main_content
-                except ScannerError as e:
-                    print(f"[ERROR] Ошибка парсинга YAML frontmatter в файле {file_path.name}: {e}")
-                    return None, content # Возвращаем None если парсинг не удался
-        
-        # Если нет frontmatter или он некорректный
-        print(f"[INFO] Frontmatter не найден или некорректен в файле: {file_path.name}")
-        return {}, content # Возвращаем пустой словарь и весь контент
-
-    except Exception as e:
-        print(f"[ERROR] Не удалось прочитать файл {file_path.name} для парсинга frontmatter: {e}")
-        return None, None # Возвращаем None, если файл не прочитался
-
-def check_and_process_metadata(output_dir, config):
-    """Check .md files in output_dir for required metadata and trigger LLM processing if needed."""
-    print(f"--- Запуск проверки метаданных в каталоге {output_dir} ---")
-    output_path = Path(output_dir)
-    processed_count = 0
-    llm_triggered_count = 0
-
-    # Проверяем наличие ключа API и файла промпта перед сканированием
-    if not config.get('openrouter_api_key'):
-        print("[WARNING] Ключ OPENROUTER_API_KEY не найден в .env. Автоматическое определение метаданных будет пропущено.")
-        return
-    
-    prompt_file = Path(config.get('prompt_file_path', ''))
-    if not prompt_file.exists():
-         print(f"[WARNING] Файл промпта '{prompt_file}' не найден. Автоматическое определение метаданных будет пропущено.")
-         return
-
-    for md_file in output_path.glob('*.md'):
-        if md_file.is_file():
-            processed_count += 1
-            print(f"Проверка файла: {md_file.name}")
-            metadata, _ = parse_frontmatter(md_file)
-
-            if metadata is None: # Ошибка чтения или парсинга файла
-                print(f"[SKIPPING] Пропуск файла {md_file.name} из-за ошибки чтения/парсинга.")
-                continue
-            
-            # Проверяем наличие обязательных полей
-            # 'клиент' опционален, остальные обязательны, но 'проект' триггерит LLM
-            required_keys = {'группа', 'проект', 'событие/назначение'} 
-            missing_keys = required_keys - set(metadata.keys())
-
-            if 'проект' in missing_keys:
-                print(f"[INFO] В файле {md_file.name} отсутствует 'проект'. Запуск обработки LLM...")
-                try:
-                    # Вызываем функцию из metadata_processor
-                    logger = metadata_processor.logger # Используем логгер из другого модуля
-                    # Устанавливаем уровень DEBUG если нужно подробное логирование
-                    # logger.setLevel(logging.DEBUG) 
-                    metadata_processor.process_single_file(str(md_file), config, verbose=True) # verbose=True для подробного лога
-                    llm_triggered_count += 1
-                except ImportError:
-                    print("[ERROR] Не удалось импортировать модуль metadata_processor. Убедитесь, что файл metadata_processor.py находится в том же каталоге.")
-                except Exception as e:
-                    print(f"[ERROR] Ошибка при вызове обработчика LLM для файла {md_file.name}: {e}")
-            elif missing_keys:
-                # Другие ключи отсутствуют, но проект есть - просто предупреждение
-                 print(f"[WARNING] В файле {md_file.name} отсутствуют метаданные: {', '.join(missing_keys)}")
-            else:
-                print(f"[OK] Все необходимые метаданные присутствуют в файле: {md_file.name}")
-
-    print(f"--- Проверка метаданных завершена. Проверено файлов: {processed_count}. Запущено LLM: {llm_triggered_count} ---")
-
 def main():
     """Main service loop"""
     print(f"Service started. Monitoring directory: {config['input_dir']}")
@@ -815,7 +835,13 @@ def main():
     # Create necessary directories at startup
     ensure_directories()
     
-    last_metadata_check_time = time.time() # Время последней проверки метаданных
+    # --- Первичная проверка метаданных при запуске ---    
+    print("\n--- Запуск первичной проверки метаданных --- ")
+    check_and_process_metadata(config['output_dir'], config)
+    print("--- Первичная проверка метаданных завершена --- ")
+    # --- Конец первичной проверки --- 
+    
+    last_metadata_check_time = time.time() 
 
     while True:
         try:
@@ -849,7 +875,6 @@ def main():
                 check_and_process_metadata(config['output_dir'], config)
                 last_metadata_check_time = current_time
 
-            # Wait before next check
             time.sleep(config['check_interval'])
             
         except Exception as e:
