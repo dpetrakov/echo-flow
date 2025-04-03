@@ -161,32 +161,43 @@ def call_openrouter(api_key: str, model: str, system_prompt: str, context: str, 
         # Добавляем прокси если он настроен
         if config.get('proxy_host') and config.get('proxy_port'):
              proxy_url = f"http://{config['proxy_user']}:{config['proxy_pass']}@{config['proxy_host']}:{config['proxy_port']}" if config.get('proxy_user') else f"http://{config['proxy_host']}:{config['proxy_port']}"
-             # Для openai v1+ требуется передача httpx.Client с настроенным прокси
-             # Пока что оставим без явной поддержки прокси в OpenAI SDK, т.к. это усложняет код.
-             # Если OpenAI SDK не подхватывает переменные окружения HTTP_PROXY/HTTPS_PROXY,
-             # потребуется добавить httpx и настроить транспорт:
-             # import httpx
-             # proxies = {"http://": proxy_url, "https://": proxy_url}
-             # client_args["http_client"] = httpx.Client(proxies=proxies)
              logger.info(f"Попытка использовать системные настройки прокси (если установлены переменные окружения HTTPS_PROXY/HTTP_PROXY)")
 
 
         client = OpenAI(**client_args)
 
-        # Используем многострочные f-строки для логгирования
-        logger.debug(f"""System Prompt:
-{system_prompt}""")
-        logger.debug(f"""User Prompt (first 500 chars):
-{user_prompt[:500]}...""") # Логируем начало user prompt
+        # Уменьшаем логирование промптов
+        logger.debug(f"System Prompt length: {len(system_prompt)}")
+        logger.debug(f"User Prompt length: {len(user_prompt)}")
+        # Убираем вывод полного текста:
+        # logger.debug(f"""System Prompt:
+        # {system_prompt}""")
+        # logger.debug(f"""User Prompt (first 500 chars):
+        # {user_prompt[:500]}...""")
 
-        completion = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format={"type": "json_object"} # Просим модель вернуть JSON
-        )
+        logger.info("Отправка запроса к LLM API...") # Лог перед вызовом
+        completion = None # Инициализируем completion
+        try:
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                response_format={"type": "json_object"}, # Просим модель вернуть JSON
+                timeout=120.0 # Добавляем таймаут в секундах (120 секунд = 2 минуты)
+            )
+            logger.info("Ответ от LLM API получен.") # Лог после успешного вызова
+        except OpenAIError as e: # Ловим ошибки OpenAI отдельно
+            logger.error(f"Ошибка OpenAI API во время запроса: {e}")
+            return None
+        except Exception as e: # Ловим другие ошибки (включая таймаут)
+            logger.error(f"Ошибка во время вызова LLM API (возможно, таймаут): {e}")
+            return None
+
+        if completion is None: # Если запрос не удался
+             logger.error("Не удалось получить ответ от LLM API.")
+             return None
 
         response_content = completion.choices[0].message.content
         logger.debug(f"Ответ от LLM (сырой): {response_content}")
