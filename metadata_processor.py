@@ -196,10 +196,30 @@ def call_openrouter(api_key: str, model: str, system_prompt: str, context: str, 
             return None
 
         if completion is None: # Если запрос не удался
-             logger.error("Не удалось получить ответ от LLM API.")
+             logger.error("Не удалось получить ответ от LLM API (запрос завершился с ошибкой).")
              return None
 
-        response_content = completion.choices[0].message.content
+        # --- Добавляем проверки структуры ответа --- 
+        if not completion.choices:
+            logger.error(f"Ответ от LLM API не содержит 'choices'. Ответ: {completion}")
+            return None
+            
+        choice = completion.choices[0]
+        if choice is None:
+             logger.error(f"Первый элемент 'choices' в ответе LLM API равен None. Ответ: {completion}")
+             return None
+             
+        if choice.message is None:
+             logger.error(f"Поле 'message' в ответе LLM API равно None. Ответ: {completion}")
+             return None
+             
+        if choice.message.content is None:
+            logger.error(f"Поле 'content' в 'message' ответа LLM API равно None. Ответ: {completion}")
+            # Можно вернуть пустой словарь или None. Вернем None, чтобы указать на ошибку.
+            return None
+        # --- Конец проверок --- 
+            
+        response_content = choice.message.content 
         logger.debug(f"Ответ от LLM (сырой): {response_content}")
 
         # Пытаемся распарсить JSON из ответа
