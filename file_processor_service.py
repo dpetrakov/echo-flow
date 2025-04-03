@@ -625,22 +625,35 @@ def process_file(file_path):
         
         # Search for JSON file (various name patterns possible)
         json_file = None
-        json_candidates = list(output_dir.glob(f"{file_name}.json"))
-        if json_candidates:
-            json_file = json_candidates[0]
-            print(f"Found JSON file: {json_file.name}")
+        # --- ПРИОРИТЕТНЫЙ ПОИСК: Используем имя файла с меткой времени из run.bat ---
+        expected_json_filename = f"{file_name}_{timestamp}.json"
+        json_file_path_with_timestamp = output_dir / expected_json_filename
+        if json_file_path_with_timestamp.exists():
+            json_file = json_file_path_with_timestamp
+            print(f"Found JSON file with expected timestamp: {json_file.name}")
+        # --- КОНЕЦ ПРИОРИТЕТНОГО ПОИСКА ---
         
-        if not json_file:
-            json_candidates = list(output_dir.glob(f"{file_name}_*.json"))
+        # --- ФОЛБЭК ПОИСК (на случай, если имя отличается) ---
+        if not json_file: # Ищем, только если основной поиск не удался
+            json_candidates = list(output_dir.glob(f"{file_name}.json"))
             if json_candidates:
                 json_file = json_candidates[0]
-                print(f"Found JSON file with timestamp: {json_file.name}")
+                print(f"Found JSON file (fallback 1 - no timestamp): {json_file.name}")
         
         if not json_file:
-            json_candidates = list(output_dir.glob(f"{file_name}.wav.json"))
+            json_candidates = list(output_dir.glob(f"{file_name}_*.json")) # Ищем с ЛЮБЫМ меткой
+            if json_candidates:
+                # Отсортируем по времени изменения, чтобы взять самый новый, если их несколько
+                json_candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                json_file = json_candidates[0]
+                print(f"Found JSON file (fallback 2 - wildcard timestamp): {json_file.name}")
+        
+        if not json_file:
+            json_candidates = list(output_dir.glob(f"{file_name}.wav.json")) # Старый вариант с .wav
             if json_candidates:
                 json_file = json_candidates[0]
-                print(f"Found JSON file with .wav suffix: {json_file.name}")
+                print(f"Found JSON file (fallback 3 - .wav suffix): {json_file.name}")
+        # --- КОНЕЦ ФОЛБЭК ПОИСКА ---
         
         # Create names for output files with new naming scheme
         txt_file = output_dir / f"{filename_prefix}_formatted.txt"
