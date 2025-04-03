@@ -419,7 +419,11 @@ def parse_frontmatter(file_path):
         return None, None # Возвращаем None, если файл не прочитался
 
 def check_single_md_metadata(md_file: Path, config: dict):
-    """Checks a single MD file for required metadata and triggers LLM if needed."""
+    """Checks a single MD file for required metadata and triggers LLM if needed.
+       Returns True if LLM was triggered and completed successfully,
+       False if LLM was not needed, skipped, or failed with non-rate-limit error,
+       'RATE_LIMIT_ERROR' if a rate limit error occurred.
+    """
     if not md_file.is_file():
         print(f"[WARNING] Файл {md_file.name} не найден или не является файлом. Пропуск проверки метаданных.")
         return False # Не триггерили LLM
@@ -434,7 +438,6 @@ def check_single_md_metadata(md_file: Path, config: dict):
     required_keys = {'группа', 'проект', 'событие/назначение'} 
     missing_keys = required_keys - set(metadata.keys())
 
-    llm_triggered = False
     if 'проект' in missing_keys:
         print(f"[INFO] В файле {md_file.name} отсутствует 'проект'. Запуск обработки LLM...")
         try:
@@ -450,36 +453,52 @@ def check_single_md_metadata(md_file: Path, config: dict):
 
             # Вызываем функцию из metadata_processor
             logger = metadata_processor.logger 
-            # Устанавливаем verbose=True для детального лога при необходимости
-            metadata_processor.process_single_file(str(md_file), config, verbose=True) 
-            llm_triggered = True
+            llm_result = metadata_processor.process_single_file(str(md_file), config, verbose=False) 
+            
+            # Проверяем результат
+            if llm_result == "RATE_LIMIT_ERROR":
+                return "RATE_LIMIT_ERROR" # Возвращаем маркер
+            elif llm_result is True: # Успешный вызов и обновление файла
+                 return True
+            else: # Ошибка или файл не обновлен
+                 return False
+                 
         except ImportError:
             print("[ERROR] Не удалось импортировать модуль metadata_processor.")
+            return False
         except Exception as e:
-            print(f"[ERROR] Ошибка при вызове обработчика LLM для файла {md_file.name}: {e}")
+            print(f"[ERROR] Непредвиденная ошибка при вызове обработчика LLM для файла {md_file.name}: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     elif missing_keys:
          print(f"[WARNING] В файле {md_file.name} отсутствуют метаданные: {', '.join(missing_keys)} (кроме 'проект')")
+         return False # LLM не запускался
     else:
         print(f"[OK] Все необходимые метаданные присутствуют в файле: {md_file.name}")
+        return False # LLM не запускался
         
-    return llm_triggered
-
 def check_and_process_metadata(output_dir, config):
     """Periodically check all .md files in output_dir for required metadata."""
     print(f"--- Запуск периодической проверки метаданных в каталоге {output_dir} ---")
     output_path = Path(output_dir)
     processed_count = 0
     llm_triggered_count = 0
-
-    # Проверки ключа и файла промпта теперь внутри check_single_md_metadata
+    rate_limit_hit = False # Флаг для отслеживания ошибки лимита
 
     for md_file in output_path.glob('*.md'):
         if md_file.is_file():
             processed_count += 1
-            if check_single_md_metadata(md_file, config):
+            result = check_single_md_metadata(md_file, config)
+            if result == "RATE_LIMIT_ERROR":
+                 print(f"[STOP] Обнаружена ошибка лимита API при обработке {md_file.name}. Остановка текущего цикла проверки метаданных.")
+                 rate_limit_hit = True
+                 break # Прерываем цикл
+            elif result is True:
                  llm_triggered_count += 1
 
-    print(f"--- Периодическая проверка метаданных завершена. Проверено файлов: {processed_count}. Запущено LLM: {llm_triggered_count} ---")
+    status = "Завершено" if not rate_limit_hit else "Прервано из-за лимита API"
+    print(f"--- Периодическая проверка метаданных завершена ({status}). Проверено файлов: {processed_count}. Запущено LLM: {llm_triggered_count} ---")
 
 def process_file(file_path):
     """Process a single file (audio or PDF)"""
@@ -754,7 +773,11 @@ def process_file(file_path):
         # --- Немедленная проверка метаданных для созданного MD файла ---            
         if md_file_to_check and md_file_to_check.exists():
             print(f"\n--- Запуск немедленной проверки метаданных для {md_file_to_check.name} ---")
-            check_single_md_metadata(md_file_to_check, config)
+            # Немедленная проверка НЕ должна прерывать основной процесс,
+            # даже если столкнется с лимитом. Мы просто логируем результат.
+            check_result = check_single_md_metadata(md_file_to_check, config)
+            if check_result == "RATE_LIMIT_ERROR":
+                 print(f"[INFO] Не удалось выполнить немедленную проверку метаданных для {md_file_to_check.name} из-за лимита API.")
             print(f"--- Немедленная проверка метаданных для {md_file_to_check.name} завершена ---")
         # --- Конец немедленной проверки --- 
             

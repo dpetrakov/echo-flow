@@ -6,7 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import yaml
 from yaml.scanner import ScannerError
-from openai import OpenAI, OpenAIError
+from openai import OpenAI, OpenAIError, RateLimitError
 
 # --- Logging Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -129,9 +129,9 @@ def read_prompt_and_context(prompt_file_path: Path, vault_root: Path):
 
     return system_prompt_content.strip(), context_content.strip()
 
-# --- OpenRouter API Call ---
+# --- OpenRouter API Call (Обновлено для обработки 429) ---
 def call_openrouter(api_key: str, model: str, system_prompt: str, context: str, file_content: str, config: dict):
-    """Calls the OpenRouter API using the OpenAI SDK compatibility."""
+    """Calls the OpenRouter API, handles rate limits."""
     if not api_key:
         logger.error("Ключ OpenRouter API не предоставлен.")
         return None
@@ -188,7 +188,15 @@ def call_openrouter(api_key: str, model: str, system_prompt: str, context: str, 
                 timeout=120.0 # Добавляем таймаут в секундах (120 секунд = 2 минуты)
             )
             logger.info("Ответ от LLM API получен.") # Лог после успешного вызова
-        except OpenAIError as e: # Ловим ошибки OpenAI отдельно
+        except RateLimitError as e: # Ловим специфичную ошибку RateLimitError
+            logger.warning(f"Превышен лимит запросов (429) для модели {model}. Ответ API: {e}")
+            return "RATE_LIMIT_ERROR" # Возвращаем маркер
+        except OpenAIError as e: 
+            # Проверяем, содержит ли ошибка информацию о коде 429 (на случай, если не RateLimitError)
+            if hasattr(e, 'status_code') and e.status_code == 429:
+                 logger.warning(f"Превышен лимит запросов (429) для модели {model}. Ответ API: {e}")
+                 return "RATE_LIMIT_ERROR"
+            # Другие ошибки OpenAI
             logger.error(f"Ошибка OpenAI API во время запроса: {e}")
             return None
         except Exception as e: # Ловим другие ошибки (включая таймаут)
@@ -199,27 +207,46 @@ def call_openrouter(api_key: str, model: str, system_prompt: str, context: str, 
              logger.error("Не удалось получить ответ от LLM API (запрос завершился с ошибкой).")
              return None
 
-        # --- Добавляем проверки структуры ответа --- 
-        if not completion.choices:
-            logger.error(f"Ответ от LLM API не содержит 'choices'. Ответ: {completion}")
-            return None
-            
-        choice = completion.choices[0]
-        if choice is None:
-             logger.error(f"Первый элемент 'choices' в ответе LLM API равен None. Ответ: {completion}")
+        # --- Проверка наличия ошибки 429 в ТЕЛЕ ответа (как было в логах) --- 
+        if hasattr(completion, 'error') and completion.error:
+            error_info = completion.error
+            # Проверяем наличие кода и его значение
+            if isinstance(error_info, dict) and error_info.get('code') == 429:
+                 logger.warning(f"Превышен лимит запросов (429) для модели {model} (обнаружено в теле ответа). Ответ API: {error_info}")
+                 return "RATE_LIMIT_ERROR"
+            else:
+                # Логируем другую ошибку из тела ответа
+                logger.error(f"API вернуло ошибку в теле ответа: {error_info}")
+                return None 
+        # --- Конец проверки ошибки в теле --- 
+
+        # --- Проверки структуры успешного ответа (реструктурировано) --- 
+        response_content = None # Инициализируем
+        if completion.choices:
+            choice = completion.choices[0]
+            if choice and choice.message and choice.message.content:
+                # Все проверки прошли, извлекаем контент
+                response_content = choice.message.content
+            else:
+                # Логируем конкретную причину сбоя
+                if choice is None:
+                    logger.error(f"Первый элемент 'choices' в ответе LLM API равен None. Ответ: {completion}")
+                elif choice.message is None:
+                    logger.error(f"Поле 'message' в ответе LLM API равно None. Ответ: {completion}")
+                elif choice.message.content is None:
+                    logger.error(f"Поле 'content' в 'message' ответа LLM API равно None. Ответ: {completion}")
+                return None # Возвращаем None, если какая-либо часть отсутствует
+        else:
+             logger.error(f"Ответ от LLM API не содержит 'choices'. Ответ: {completion}")
              return None
-             
-        if choice.message is None:
-             logger.error(f"Поле 'message' в ответе LLM API равно None. Ответ: {completion}")
+
+        # Если мы здесь, response_content должен быть не None (или функция вернула None выше)
+        if response_content is None:
+             logger.error("Не удалось извлечь content из ответа LLM по неизвестной причине.")
              return None
-             
-        if choice.message.content is None:
-            logger.error(f"Поле 'content' в 'message' ответа LLM API равно None. Ответ: {completion}")
-            # Можно вернуть пустой словарь или None. Вернем None, чтобы указать на ошибку.
-            return None
         # --- Конец проверок --- 
             
-        response_content = choice.message.content 
+        # response_content = choice.message.content # Старая строка, теперь присвоение выше
         logger.debug(f"Ответ от LLM (сырой): {response_content}")
 
         # Пытаемся распарсить JSON из ответа
@@ -318,28 +345,33 @@ def process_single_file(file_path_str: str, config: dict, verbose: bool = False)
 
 
     # 3. Вызов LLM
-    llm_metadata = call_openrouter(
+    llm_result = call_openrouter(
         api_key=config['openrouter_api_key'],
         model=config['openrouter_model'],
         system_prompt=system_prompt,
         context=context_str,
         file_content=file_content,
-        config=config # Передаем всю конфигурацию для возможного использования прокси
+        config=config
     )
 
-    if not llm_metadata:
-        logger.error(f"Не удалось получить метаданные от LLM для файла {file_path.name}")
-        return False # Не обновляем файл, если LLM не вернул данные
+    # Обрабатываем результат вызова LLM
+    if llm_result == "RATE_LIMIT_ERROR":
+        logger.info(f"Обработка файла {file_path.name} прервана из-за лимита API.")
+        return "RATE_LIMIT_ERROR" # Передаем маркер дальше
+        
+    if not isinstance(llm_result, dict): # Если это None или другая ошибка
+        logger.error(f"Не удалось получить валидные метаданные от LLM для файла {file_path.name}. Результат: {llm_result}")
+        return False # Считаем это ошибкой обработки файла
 
-    # 4. Обновление файла
-    success = update_markdown_frontmatter(file_path, llm_metadata, file_content)
+    # 4. Обновление файла (только если llm_result - это dict)
+    success = update_markdown_frontmatter(file_path, llm_result, file_content)
 
     if success:
         logger.info(f"Успешно завершена обработка файла: {file_path.name}")
+        return True
     else:
         logger.error(f"Ошибка при обновлении файла: {file_path.name}")
-
-    return success
+        return False
 
 # --- Command Line Interface ---
 if __name__ == "__main__":
