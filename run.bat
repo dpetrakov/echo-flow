@@ -65,6 +65,29 @@ if "%WHISPER_TIMESTAMP%"=="" (
 set OUTPUT_PREFIX=%BASE_FILENAME%_%TIMESTAMP%
 echo [INFO] Output files will use prefix: %OUTPUT_PREFIX%
 
+:: --- Proxy Setup ---
+if defined PROXY_HOST (
+    if defined PROXY_PORT (
+        if defined PROXY_USER (
+            if defined PROXY_PASS (
+                set PROXY_URL=http://%PROXY_USER%:%PROXY_PASS%@%PROXY_HOST%:%PROXY_PORT%
+            ) else (
+                set PROXY_URL=http://%PROXY_HOST%:%PROXY_PORT%
+            )
+        ) else (
+            set PROXY_URL=http://%PROXY_HOST%:%PROXY_PORT%
+        )
+        echo [INFO] Setting proxy for whisperx download: %PROXY_URL%
+        set HTTPS_PROXY=%PROXY_URL%
+        set HTTP_PROXY=%PROXY_URL%
+    ) else (
+        echo [WARNING] PROXY_HOST is set but PROXY_PORT is missing. Proxy not configured.
+    )
+) else (
+    echo [INFO] No proxy settings found in .env for whisperx.
+)
+:: --- End Proxy Setup ---
+
 :: Run whisperx with diarization
 :: Using %OUTPUT_DIR% which is now determined by argument > env > default
 python -m whisperx "%AUDIO_FILE%" ^
