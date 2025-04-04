@@ -35,7 +35,7 @@ if not "%ARG_OUTPUT_DIR%"=="" (
 )
 
 :: Model and other parameters
-set MODEL=medium
+set MODEL=large-v2
 set DEVICE=cuda
 set LANGUAGE=Russian
 

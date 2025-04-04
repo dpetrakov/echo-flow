@@ -661,12 +661,15 @@ def process_file(file_path):
         # Create names for output files with new naming scheme
         txt_file = output_dir / f"{filename_prefix}_formatted.txt"
         md_file = output_dir / f"{filename_prefix}_transcript.md"
-        
+        # Define the output path for the original audio file *before* using it
+        new_name = f"{filename_prefix}_transcript{file_ext}"
+        output_path = Path(config['output_dir']) / new_name
+
         # Create MD file based on JSON, if found
         if json_file and not no_speech_detected:
             print("Found JSON file, starting conversion to Markdown...")
             if extract_segments_to_txt(json_file, txt_file):
-                # Передаем output_path.name как processed_filename
+                # Передаем output_path.name как processed_filename (теперь output_path определен)
                 if group_and_format_dialog(txt_file, md_file, file_path.name, output_path.name, timestamp, duration):
                     # Удаляем formatted.txt после успешного создания markdown
                     if txt_file.exists():
@@ -678,10 +681,6 @@ def process_file(file_path):
                 print(f"[INFO] No active speech detected in the audio file")
             else:
                 print(f"[ERROR] JSON file not found in directory {output_dir}")
-        
-        # Create a new filename with the new naming scheme
-        new_name = f"{filename_prefix}_transcript{file_ext}"
-        output_path = Path(config['output_dir']) / new_name
         
         # Move the original file to the output directory
         print(f"\n>>> Moving original file to output directory: {file_path.name} -> {output_path.name}")
