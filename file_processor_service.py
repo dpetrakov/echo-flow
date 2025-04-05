@@ -269,7 +269,7 @@ def group_and_format_dialog(input_file, output_md, original_filename, processed_
             out.write("---\n")
             out.write(f"created: {formatted_date}\n")
             # Используем новый формат ссылки
-            out.write(f"original_filename: [[{processed_filename}|{original_filename}]]\n") 
+            out.write(f"original_filename: ""[[{processed_filename}|{original_filename}]]""\n") 
             out.write(f"duration: {timedelta(seconds=duration)}\n")
             out.write("---\n\n")
             
@@ -555,7 +555,7 @@ def process_file(file_path):
                             "---\n"
                             f"created: {formatted_date}\n"
                             # Используем новый формат ссылки
-                            f"original_filename: [[{output_path.name}|{file_path.name}]]\n" 
+                            f"original_filename: ""[[{output_path.name}|{file_path.name}]]""\n" 
                             f"processed_filename: {output_path.name}\n"
                             f"processor: marker_single\n"
                             "---\n\n"
@@ -726,7 +726,7 @@ def process_file(file_path):
                     f.write("---\n")
                     f.write(f"created: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')}\n")
                     # Используем новый формат ссылки
-                    f.write(f"original_filename: [[{output_path.name}|{file_path.name}]]\n") 
+                    f.write(f"original_filename: ""[[{output_path.name}|{file_path.name}]]""\n") 
                     f.write(f"duration: {timedelta(seconds=duration)}\n")
                     f.write(f"error: {'No speech detected' if no_speech_detected else 'Processing error'}\n")
                     f.write("---\n\n")
@@ -815,7 +815,7 @@ def create_pdf_error_markdown(file_path, output_path, timestamp, error_message, 
             f.write("---\n")
             f.write(f"created: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')}\n")
             # Используем новый формат ссылки
-            f.write(f"original_filename: [[{output_path.name}|{file_path.name}]]\n") 
+            f.write(f"original_filename: ""[[{output_path.name}|{file_path.name}]]""\n") 
             f.write(f"processed_filename: {output_path.name}\n")
             f.write(f"error: PDF processing error\n")
             f.write(f"processor: marker_single\n")
