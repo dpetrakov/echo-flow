@@ -270,7 +270,8 @@ def group_and_format_dialog(input_file, output_md, original_filename, processed_
             out.write(f"created: {formatted_date}\n")
             # Используем новый формат ссылки (исправлено)
             out.write(f'original_filename: "[[{processed_filename}|{original_filename}]]"\\n') 
-            out.write(f"duration: {timedelta(seconds=duration)}\\n")
+            # Заключаем duration в кавычки (исправлено)
+            out.write(f'duration: "{timedelta(seconds=duration)}"\\n') 
             out.write("---\n\n")
             
             for raw_speaker, blocks in dialog:
@@ -727,7 +728,8 @@ def process_file(file_path):
                     f.write(f"created: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')}\\n")
                     # Используем новый формат ссылки (исправлено)
                     f.write(f'original_filename: "[[{output_path.name}|{file_path.name}]]"\\n') 
-                    f.write(f"duration: {timedelta(seconds=duration)}\\n")
+                    # Заключаем duration в кавычки (исправлено)
+                    f.write(f'duration: "{timedelta(seconds=duration)}"\\n') 
                     f.write(f"error: {'No speech detected' if no_speech_detected else 'Processing error'}\\n")
                     f.write("---\n\n")
                     
