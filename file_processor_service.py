@@ -268,9 +268,9 @@ def group_and_format_dialog(input_file, output_md, original_filename, processed_
             # Добавляем метаданные в формате Obsidian
             out.write("---\n")
             out.write(f"created: {formatted_date}\n")
-            # Используем новый формат ссылки
-            out.write(f"original_filename: ""[[{processed_filename}|{original_filename}]]""\n") 
-            out.write(f"duration: {timedelta(seconds=duration)}\n")
+            # Используем новый формат ссылки (исправлено)
+            out.write(f'original_filename: "[[{processed_filename}|{original_filename}]]"\\n') 
+            out.write(f"duration: {timedelta(seconds=duration)}\\n")
             out.write("---\n\n")
             
             for raw_speaker, blocks in dialog:
@@ -554,8 +554,8 @@ def process_file(file_path):
                         metadata = (
                             "---\n"
                             f"created: {formatted_date}\n"
-                            # Используем новый формат ссылки
-                            f"original_filename: ""[[{output_path.name}|{file_path.name}]]""\n" 
+                            # Используем новый формат ссылки (исправлено)
+                            f'original_filename: "[[{output_path.name}|{file_path.name}]]"\\n'
                             f"processed_filename: {output_path.name}\n"
                             f"processor: marker_single\n"
                             "---\n\n"
@@ -724,61 +724,61 @@ def process_file(file_path):
                 with error_md_file.open("w", encoding="utf-8") as f:
                     # Добавляем метаданные в формате Obsidian
                     f.write("---\n")
-                    f.write(f"created: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    # Используем новый формат ссылки
-                    f.write(f"original_filename: ""[[{output_path.name}|{file_path.name}]]""\n") 
-                    f.write(f"duration: {timedelta(seconds=duration)}\n")
-                    f.write(f"error: {'No speech detected' if no_speech_detected else 'Processing error'}\n")
+                    f.write(f"created: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')}\\n")
+                    # Используем новый формат ссылки (исправлено)
+                    f.write(f'original_filename: "[[{output_path.name}|{file_path.name}]]"\\n') 
+                    f.write(f"duration: {timedelta(seconds=duration)}\\n")
+                    f.write(f"error: {'No speech detected' if no_speech_detected else 'Processing error'}\\n")
                     f.write("---\n\n")
                     
                     if no_speech_detected:
-                        f.write(f"# No speech detected in file {file_path.name}\n\n")
-                        f.write(f"Processing date and time: {timestamp.replace('_', ' ')}\n\n")
-                        f.write("## File Information\n\n")
-                        # Используем новый формат ссылки
-                        f.write(f"- Filename: [[{output_path.name}|{file_path.name}]]\n") 
-                        f.write(f"- Size: {file_path.stat().st_size} bytes\n")
-                        f.write(f"- Moved to: {output_path.name}\n\n")
-                        f.write("The audio file was processed, but no speech was detected. This could be due to:\n\n")
+                        f.write(f"# No speech detected in file {file_path.name}\\n\\n")
+                        f.write(f"Processing date and time: {timestamp.replace('_', ' ')}\\n\\n")
+                        f.write("## File Information\\n\\n")
+                        # Используем новый формат ссылки (исправлено)
+                        f.write(f'- Filename: "[[{output_path.name}|{file_path.name}]]"\\n') 
+                        f.write(f"- Size: {file_path.stat().st_size} bytes\\n")
+                        f.write(f"- Moved to: {output_path.name}\\n\\n")
+                        f.write("The audio file was processed, but no speech was detected. This could be due to:\\n\\n")
                         f.write("- Silent audio file\n")
                         f.write("- Very low volume speech\n")
                         f.write("- Non-speech audio content\n")
                         f.write("- Format not compatible with speech recognition\n")
                     else:
-                        f.write(f"# Error processing file {file_path.name}\n\n")
-                        f.write(f"Processing date and time: {timestamp.replace('_', ' ')}\n\n")
+                        f.write(f"# Error processing file {file_path.name}\\n\\n")
+                        f.write(f"Processing date and time: {timestamp.replace('_', ' ')}\\n\\n")
                         
                         # Add information about JSON file if found
                         if json_file and json_file.exists():
-                            f.write(f"JSON file preserved for debugging: `{json_file.name}`\n\n")
+                            f.write(f"JSON file preserved for debugging: `{json_file.name}`\\n\\n")
                         
-                        f.write("## Processing Output\n\n")
-                        f.write("```\n")
+                        f.write("## Processing Output\\n\\n")
+                        f.write("```\\n")
                         if 'subprocess_result' in locals() and subprocess_result:
                             f.write(subprocess_result.stdout)
                             if subprocess_result.stderr:
-                                f.write("\n\n### Errors:\n")
+                                f.write("\\n\\n### Errors:\\n")
                                 f.write(subprocess_result.stderr)
                         else:
                             f.write("No processing output available.")
-                        f.write("\n```\n\n")
+                        f.write("\\n```\\n\\n")
                         
-                        f.write("## Possible Error Causes\n\n")
-                        f.write("- File format not supported\n")
-                        f.write("- File does not contain speech\n")
-                        f.write("- Error in speech recognition\n")
-                        f.write("- Error in speaker identification\n")
+                        f.write("## Possible Error Causes\\n\\n")
+                        f.write("- File format not supported\\n")
+                        f.write("- File does not contain speech\\n")
+                        f.write("- Error in speech recognition\\n")
+                        f.write("- Error in speaker identification\\n")
                         
-                        f.write("\n## File Information\n\n")
-                        # Используем новый формат ссылки
-                        f.write(f"- Filename: [[{output_path.name}|{file_path.name}]]\n") 
-                        f.write(f"- Size: {file_path.stat().st_size} bytes\n")
-                        f.write(f"- Moved to: {output_path.name}\n")
+                        f.write("\\n## File Information\\n\\n")
+                        # Используем новый формат ссылки (исправлено)
+                        f.write(f'- Filename: "[[{output_path.name}|{file_path.name}]]"\\n') 
+                        f.write(f"- Size: {file_path.stat().st_size} bytes\\n")
+                        f.write(f"- Moved to: {output_path.name}\\n")
                     
                 if no_speech_detected:
-                    print(f"\n>>> File {file_path.name} contains no speech. Created information Markdown: {error_md_file.name}")
+                    print(f"\\n>>> File {file_path.name} contains no speech. Created information Markdown: {error_md_file.name}")
                 else:
-                    print(f"\n>>> File {file_path.name} processed with errors. Created error information Markdown: {error_md_file.name}")
+                    print(f"\\n>>> File {file_path.name} processed with errors. Created error information Markdown: {error_md_file.name}")
                 
                 if json_file and json_file.exists() and not no_speech_detected:
                     print(f"JSON file preserved for debugging: {json_file.name}")
@@ -787,7 +787,7 @@ def process_file(file_path):
         
         # --- Немедленная проверка метаданных для созданного MD файла ---            
         if md_file_to_check and md_file_to_check.exists():
-            print(f"\n--- Запуск немедленной проверки метаданных для {md_file_to_check.name} ---")
+            print(f"\\n--- Запуск немедленной проверки метаданных для {md_file_to_check.name} ---")
             # Немедленная проверка НЕ должна прерывать основной процесс,
             # даже если столкнется с лимитом. Мы просто логируем результат.
             check_result = check_single_md_metadata(md_file_to_check, config)
@@ -813,48 +813,48 @@ def create_pdf_error_markdown(file_path, output_path, timestamp, error_message, 
         with error_md_file.open("w", encoding="utf-8") as f:
             # Добавляем метаданные в формате Obsidian
             f.write("---\n")
-            f.write(f"created: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')}\n")
-            # Используем новый формат ссылки
-            f.write(f"original_filename: ""[[{output_path.name}|{file_path.name}]]""\n") 
-            f.write(f"processed_filename: {output_path.name}\n")
-            f.write(f"error: PDF processing error\n")
-            f.write(f"processor: marker_single\n")
-            f.write("---\n\n")
+            f.write(f"created: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')}\\n")
+            # Используем новый формат ссылки (исправлено)
+            f.write(f'original_filename: "[[{output_path.name}|{file_path.name}]]"\\n') 
+            f.write(f"processed_filename: {output_path.name}\\n")
+            f.write(f"error: PDF processing error\\n")
+            f.write(f"processor: marker_single\\n")
+            f.write("---\\n\\n")
             
-            f.write(f"# Ошибка обработки PDF файла {output_path.name}\n\n")
-            f.write(f"Дата и время обработки: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%d.%m.%Y %H:%M:%S')}\n\n")
+            f.write(f"# Ошибка обработки PDF файла {output_path.name}\\n\\n")
+            f.write(f"Дата и время обработки: {datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%d.%m.%Y %H:%M:%S')}\\n\\n")
             
-            f.write("## Детали ошибки\n\n")
-            f.write(f"{error_message}\n\n")
+            f.write("## Детали ошибки\\n\\n")
+            f.write(f"{error_message}\\n\\n")
             
             # Добавляем вывод команды, если он доступен
             if command_output:
-                f.write("## Вывод команды\n\n")
-                f.write("```\n")
+                f.write("## Вывод команды\\n\\n")
+                f.write("```\\n")
                 f.write(command_output)
-                f.write("\n```\n\n")
+                f.write("\\n```\\n\\n")
             
-            f.write("## Возможные причины ошибки\n\n")
-            f.write("- PDF файл имеет неподдерживаемый формат\n")
-            f.write("- PDF файл зашифрован или защищен\n")
-            f.write("- Ошибка в инструменте marker_single\n")
-            f.write("- Недостаточно памяти или ресурсов для обработки\n")
-            f.write("- PDF файл содержит только изображения без текстового слоя\n")
-            f.write("- Проблемы с ключом API для LLM\n")
+            f.write("## Возможные причины ошибки\\n\\n")
+            f.write("- PDF файл имеет неподдерживаемый формат\\n")
+            f.write("- PDF файл зашифрован или защищен\\n")
+            f.write("- Ошибка в инструменте marker_single\\n")
+            f.write("- Недостаточно памяти или ресурсов для обработки\\n")
+            f.write("- PDF файл содержит только изображения без текстового слоя\\n")
+            f.write("- Проблемы с ключом API для LLM\\n")
             
-            f.write("\n## Информация о файле\n\n")
-            # Используем новый формат ссылки
-            f.write(f"- Оригинальный файл: [[{output_path.name}|{file_path.name}]]\n") 
-            f.write(f"- Обработанный файл: {output_path.name}\n")
-            f.write(f"- Размер: {output_path.stat().st_size/1024:.2f} КБ\n")
-            f.write(f"- Расположение: {output_path}\n\n")
+            f.write("\\n## Информация о файле\\n\\n")
+            # Используем новый формат ссылки (исправлено)
+            f.write(f'- Оригинальный файл: "[[{output_path.name}|{file_path.name}]]"\\n') 
+            f.write(f"- Обработанный файл: {output_path.name}\\n")
+            f.write(f"- Размер: {output_path.stat().st_size/1024:.2f} КБ\\n")
+            f.write(f"- Расположение: {output_path}\\n\\n")
             
-            f.write("## Что делать дальше\n\n")
-            f.write("1. Проверьте формат PDF файла\n")
-            f.write("2. Убедитесь, что файл не защищен паролем\n")
-            f.write("3. Проверьте наличие и правильность API ключа в .env файле\n")
-            f.write("4. Попробуйте обработать файл вручную командой `marker_single`\n")
-            f.write("5. Проверьте содержимое временного каталога для дополнительной информации\n")
+            f.write("## Что делать дальше\\n\\n")
+            f.write("1. Проверьте формат PDF файла\\n")
+            f.write("2. Убедитесь, что файл не защищен паролем\\n")
+            f.write("3. Проверьте наличие и правильность API ключа в .env файле\\n")
+            f.write("4. Попробуйте обработать файл вручную командой `marker_single`\\n")
+            f.write("5. Проверьте содержимое временного каталога для дополнительной информации\\n")
         
         print(f"[INFO] Создан файл с информацией об ошибке: {error_md_file.name}")
         return error_md_file
